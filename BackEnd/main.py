@@ -41,6 +41,6 @@ async def get_history(id: str = None, model_name: str = None):
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-    # pip install fastapi uvicorn
+    # pip install fastapi uvicorn motor
     # uvicorn main:app --reload
     # 으로 서버 실행
