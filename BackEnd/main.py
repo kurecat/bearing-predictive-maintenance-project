@@ -1,9 +1,14 @@
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware  # 미들웨어 모듈 
 import uvicorn
-import numpy as np
-from model import load_cnn_model
-from preprocess import preprocess_csv
+from motor.motor_asyncio import AsyncIOMotorClient
+
+def fix_objectid(document):
+    if not document:
+        return document
+    document["_id"] = str(document["_id"])
+    return document
+
 
 app = FastAPI()
 
@@ -16,10 +21,10 @@ app.add_middleware(
     allow_headers=["*"],  # 모든 HTTP 헤더 허용
 )
 
-model = load_cnn_model()
 
-# 라벨 매핑
-label_map = {0: "정상", 1: "베어링불량", 2: "회전체불평형", 3: "축정렬불량", 4: "벨트느슨함"}
+MONGO_URL = "mongodb://localhost:27017"
+client = AsyncIOMotorClient(MONGO_URL)
+db = client["bearing_predictive_maintenance"]
 
 # 기본 엔드포인트
 @app.get("/")
@@ -58,28 +63,23 @@ async def get_real_time_prediction():
     }
     return {"status": "success", "data": real_time_status}
 
-# 업로드 엔드포인트
-@app.post("/upload")
-async def upload_data():
-    id = 1
-    return {"message": f"데이터 업로드됨, id : {id}"}
+@app.post("/history")
+async def create_history(data: dict = Body(...)):
+    result = await db.history.insert_one(data)
+    return {"message": "History created", "id": str(result.inserted_id)}
 
-@app.post("/predict")
-async def predict(file: UploadFile):
-    # 업로드된 CSV 파일 저장
-    file_path = f"./temp_{file.filename}"
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-
-    # 전처리
-    X_input = preprocess_csv(file_path)
-
-    # 예측
-    pred = model.predict(X_input)
-    pred_class = np.argmax(pred, axis=1)[0]
-    result = label_map[pred_class]
-
-    return {"prediction": result, "probabilities": pred.tolist()}
+@app.get("/history")
+async def get_history(id: str = None, model_name: str = None):
+    if id:
+        history = await db.history.find_one({"_id": id})
+        return fix_objectid(history) if history else {"message": "History not found"}
+    elif model_name:
+        # motor_spec 안의 model 필드 검색
+        history_list = await db.history.find({"motor_spec.model": model_name}).to_list(100)
+        return [fix_objectid(history) for history in history_list]
+    else:
+        history_list = await db.history.find({}).to_list(100)
+        return [fix_objectid(history) for history in history_list]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
