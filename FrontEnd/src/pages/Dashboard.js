@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import styled from "styled-components";
 
-// 가상 데이터
+// 가상 데이터 (온도 제외)
 const initialMotors = [
-  { id: "M-101", vibration: 0.02, temp: 35, current: 2.1, prob: 2, label: 0 },
-  { id: "M-102", vibration: 0.03, temp: 36, current: 2.2, prob: 5, label: 0 },
-  { id: "M-103", vibration: 0.18, temp: 55, current: 3.4, prob: 92, label: 1 },
+  { id: "M-101", vibration: 0.02, current: 2.1, prob: 2, label: 0 },
+  { id: "M-102", vibration: 0.03, current: 2.2, prob: 5, label: 0 },
+  { id: "M-103", vibration: 0.18, current: 3.4, prob: 92, label: 1 },
 ];
 
 export default function Dashboard() {
@@ -13,7 +13,7 @@ export default function Dashboard() {
   const [alertLogs, setAlertLogs] = useState([
     {
       time: "10:15:22",
-      message: "M-103 모터 진동 및 온도 이상 감지 (고장 확률 92%)",
+      message: "M-103 모터 진동 이상 감지 (고장 확률 92%)",
     },
   ]);
   const [isDragging, setIsDragging] = useState(false);
@@ -51,15 +51,16 @@ export default function Dashboard() {
 
       for (let i = 1; i < lines.length; i++) {
         const cols = lines[i].split(",");
-        if (cols.length >= 3) {
+        // 진동, 전류 2가지 데이터만 처리
+        if (cols.length >= 2) {
           const v = parseFloat(cols[0]);
-          const t = parseFloat(cols[1]);
-          const c = parseFloat(cols[2]);
+          const c = parseFloat(cols[1]);
 
           let probability = 5;
           let newLabel = 0;
 
-          if (v >= 0.1 || t >= 50) {
+          // 온도 조건 삭제, 진동만 체크
+          if (v >= 0.1) {
             probability = Math.floor(Math.random() * 20) + 80;
             newLabel = 1;
           }
@@ -68,7 +69,6 @@ export default function Dashboard() {
           newMotors.push({
             id,
             vibration: v,
-            temp: t,
             current: c,
             prob: probability,
             label: newLabel,
@@ -97,7 +97,7 @@ export default function Dashboard() {
   return (
     <PageContainer>
       <Header>
-        <Title>현장 설비 예지보전 통합 관제실</Title>
+        <Title>현장 모터 예지보전 통합 관제실</Title>
         <Subtitle>실시간 모니터링 시스템 작동 중...</Subtitle>
       </Header>
 
@@ -118,7 +118,7 @@ export default function Dashboard() {
                 onChange={handleFileChange}
               />
               <DropText>클릭하거나 CSV 파일을 이곳에 드롭하세요</DropText>
-              <DropSubText>형식: vibration, temp, current</DropSubText>
+              <DropSubText>형식: vibration, current</DropSubText>
             </DropZone>
           </Card>
 
@@ -145,7 +145,7 @@ export default function Dashboard() {
         <RightPanel>
           <KpiRow>
             <KpiBox>
-              <KpiLabel>전체 관제 설비</KpiLabel>
+              <KpiLabel>전체 관제 모터</KpiLabel>
               <KpiValue>{total} 대</KpiValue>
             </KpiBox>
             <KpiBox>
@@ -159,13 +159,12 @@ export default function Dashboard() {
           </KpiRow>
 
           <Card>
-            <CardTitle>설비별 정밀 분석 현황</CardTitle>
+            <CardTitle>모터별 정밀 분석 현황</CardTitle>
             <StyledTable>
               <thead>
                 <tr>
-                  <Th>설비 ID</Th>
+                  <Th>모터 ID</Th>
                   <Th>진동 (임계치 0.1)</Th>
-                  <Th>온도 (임계치 50°C)</Th>
                   <Th>전류</Th>
                   <Th>고장 확률</Th>
                   <Th>AI 판정</Th>
@@ -197,16 +196,6 @@ export default function Dashboard() {
                         }}
                       >
                         {motor.vibration}
-                      </Td>
-                      <Td
-                        style={{
-                          color:
-                            motor.temp >= 50 ? "var(--error)" : "var(--font)",
-                          fontWeight:
-                            motor.temp >= 50 ? "var(--bold)" : "var(--normal)",
-                        }}
-                      >
-                        {motor.temp} °C
                       </Td>
                       <Td>{motor.current} A</Td>
 
@@ -254,7 +243,7 @@ const PageContainer = styled.div`
   width: 100%;
   padding: 30px;
   box-sizing: border-box;
-  background-color: var(--background);
+  background-color: var(--background2);
   min-height: calc(100vh - 50px);
 `;
 
@@ -262,15 +251,14 @@ const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 30px;
   width: 100%;
 `;
 
 const Title = styled.h1`
-  font-size: var(--font3xl);
+  font-size: var(--fontTitle);
   color: var(--font);
-  font-weight: var(--bold);
-  margin: 0;
+  font-weight: 800;
 `;
 
 const Subtitle = styled.div`
@@ -314,7 +302,6 @@ const CardTitle = styled.h2`
   font-weight: var(--bold);
 `;
 
-// 드래그 상태에 따라 테두리와 배경색이 자연스럽게 바뀝니다.
 const DropZone = styled.label`
   display: flex;
   flex-direction: column;

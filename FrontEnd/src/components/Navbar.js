@@ -9,28 +9,25 @@ const Navbar = () => {
   return (
     <SidebarContainer>
       <TopSection>
-        <LogoArea to="/">Moter Monitoring</LogoArea>
-
-        <SearchBar>
-          <SearchIcon>🔍</SearchIcon>
-          <SearchInput type="text" placeholder="Search..." />
-        </SearchBar>
+        <LogoArea to="/">Ai For Motor</LogoArea>
       </TopSection>
 
       <MenuList>
         <MenuItem to="/" $isActive={path === "/"}>
           대시보드
         </MenuItem>
-        <MenuItem to="/input1" $isActive={path === "/input1"}>
+        <MenuItem to="/real-time" $isActive={path === "/real-time"}>
+          실시간 모니터링
+        </MenuItem>
+        <MenuItem to="/report" $isActive={path === "/report"}>
           분석 리포트
         </MenuItem>
       </MenuList>
 
       <BottomSection>
-        <IconButton>🔔</IconButton>
         <ProfileArea>
           <Avatar>H</Avatar>
-          <Greeting>Hi Harin</Greeting>
+          <Greeting>Hi, Harin Kim</Greeting>
         </ProfileArea>
       </BottomSection>
     </SidebarContainer>
@@ -40,10 +37,10 @@ const Navbar = () => {
 export default Navbar;
 
 const SidebarContainer = styled.div`
-  width: 260px;
+  width: 250px;
   height: 100vh;
-  background-color: #ffffff;
-  border-right: 1px solid var(--border, #e2e8f0);
+  background-color: var(--background);
+  border-right: 1px solid var(--border);
 
   display: flex;
   flex-direction: column;
@@ -58,15 +55,14 @@ const TopSection = styled.div`
 `;
 
 const LogoArea = styled(Link)`
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--font);
   letter-spacing: 0.5px;
   display: flex;
   align-items: center;
+  justify-content: center;
   text-decoration: none;
-  padding-left: 10px;
-  margin-bottom: 20px;
 `;
 
 const LogoIcon = styled.span`
