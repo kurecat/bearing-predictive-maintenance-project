@@ -1,7 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 import uvicorn
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
+
+def fix_objectid(document):
+    if not document:
+        return document
+    document["_id"] = str(document["_id"])
+    return document
+
 
 app = FastAPI()
 
@@ -14,26 +20,23 @@ db = client["bearing_predictive_maintenance"]
 async def read_root():
     return {"message": "Hello World"}
 
-@app.patch("/history")
-async def update_history(id: int, data: dict):
-    result = await db.history.update_one({"_id": id}, {"$set": data})
-    if result.modified_count > 0:
-        return {"message": "History updated successfully"}
-    else:
-        return {"error": "History not found or no changes made"}
+@app.post("/history")
+async def create_history(data: dict = Body(...)):
+    result = await db.history.insert_one(data)
+    return {"message": "History created", "id": str(result.inserted_id)}
 
 @app.get("/history")
-async def get_history_list():
-    history_list = await db.history.find({}, {"_id": 1, "timestamp": 1}).to_list(100)
-    return history_list
-
-@app.get("/history/{id}")
-async def get_history_by_id(id: int):
-    history = await db.history.find_one({"_id": id})
-    if history:
-        return history
+async def get_history(id: str = None, model_name: str = None):
+    if id:
+        history = await db.history.find_one({"_id": id})
+        return fix_objectid(history) if history else {"message": "History not found"}
+    elif model_name:
+        # motor_spec 안의 model 필드 검색
+        history_list = await db.history.find({"motor_spec.model": model_name}).to_list(100)
+        return [fix_objectid(history) for history in history_list]
     else:
-        return {"error": "History not found"}
+        history_list = await db.history.find({}).to_list(100)
+        return [fix_objectid(history) for history in history_list]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
