@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
@@ -16,6 +16,8 @@ current_metadata_col = db["current_metadata"]
 vibration_rms_col = db["vibration_rms"]
 vibration_samples_col = db["vibration_samples"]
 vibration_metadata_col = db["vibration_metadata"]
+
+active_connections = []
 
 app = FastAPI()
 
@@ -86,10 +88,31 @@ def find_or_create_device(spec: Dict[str, Any]) -> ObjectId:
             "alias": "0"
         })
         return result.inserted_id
+    
+async def broadcast_event(event: str, meta: dict, rms_values: list):
+    payload = {
+        "event": event,
+        "payload": {
+            "metadata": {
+                "_id": str(meta["_id"]),
+                "device_ref": str(meta["device_ref"]),
+                "date": meta["date"],
+                "filename": meta["filename"],
+                "data_label": meta.get("data_label"),
+                "label_no": meta.get("label_no"),
+                "period": meta["period"],
+                "sample_rate": meta["sample_rate"],
+                "data_length": meta["data_length"]
+            },
+            "rms": rms_values
+        }
+    }
+    for conn in active_connections:
+        await conn.send_json(payload)
 
 # === 업로드 엔드포인트 (Current) ===
 @app.post("/api/upload/current")
-def upload_current(data: UploadData):
+async def upload_current(data: UploadData):
     spec = parse_motor_spec(data.MotorSpec)
     device_ref = find_or_create_device(spec)
 
@@ -118,11 +141,14 @@ def upload_current(data: UploadData):
         "samples_id": samples_id
     })
 
+    meta_doc = current_metadata_col.find_one({"_id": meta_result.inserted_id})
+    await broadcast_event("current_data", meta_doc, data.RMS)
+
     return {"status": "ok", "metadata_id": str(meta_result.inserted_id)}
 
 # === 업로드 엔드포인트 (Vibration) ===
 @app.post("/api/upload/vibration")
-def upload_vibration(data: UploadData):
+async def upload_vibration(data: UploadData):
     spec = parse_motor_spec(data.MotorSpec)
     device_ref = find_or_create_device(spec)
 
@@ -150,6 +176,9 @@ def upload_vibration(data: UploadData):
         "rms_id": rms_id,
         "samples_id": samples_id
     })
+
+    meta_doc = vibration_metadata_col.find_one({"_id": meta_result.inserted_id})
+    await broadcast_event("vibration_data", meta_doc, data.RMS)
 
     return {"status": "ok", "metadata_id": str(meta_result.inserted_id)}
 
@@ -211,9 +240,20 @@ def get_vibration_samples(device_id: str):
     samples = [doc.get("samples") for doc in docs if "samples" in doc]
     return {"device_id": device_id, "samples": samples}
 
+@app.websocket("/socket/devices")
+async def device_socket(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print("Client says:", data)
+    except Exception:
+        active_connections.remove(websocket)
+
 # === 실행 엔트리포인트 ===
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-# pip install fastapi uvicorn pymongo
+# pip install fastapi "uvicorn[standard]" pymongo
 # uvicorn main:app --reload --host 0.0.0.0 --port 8000
