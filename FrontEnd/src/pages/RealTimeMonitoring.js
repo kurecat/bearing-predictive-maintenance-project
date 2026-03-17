@@ -9,7 +9,7 @@ const initialNodes = Array.from({ length: 9 }, (_, i) => ({
   vibration: 0.02,
   current: 2.1,
   prob: 5,
-  history: Array.from({ length: 20 }, () => ({ val: 0.02 })),
+  history: Array.from({ length: 20 }, () => ({ vib: 0.02, cur: 2.1 })),
 }));
 
 export default function RealTimeMonitoring() {
@@ -20,7 +20,7 @@ export default function RealTimeMonitoring() {
   const triggerAlert = (name, prob) => {
     const now = new Date();
     const time = now.toLocaleTimeString();
-    const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const date = now.toISOString().split("T")[0];
     const newAlert = { id: Date.now(), name, prob, time, date };
     setAlerts((prev) => [...prev, newAlert]);
 
@@ -46,10 +46,12 @@ export default function RealTimeMonitoring() {
           const isTarget = node.id === "MTR-105";
           const finalV = isTarget ? randV + 0.05 : randV;
           const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
+          const finalC = parseFloat(
+            (2.1 + (Math.random() - 0.5) * 0.2).toFixed(2),
+          );
 
-          // --- 날짜 및 시간 생성 (수정된 부분) ---
           const now = new Date();
-          const dateString = now.toISOString().split("T")[0]; // "2026-03-17"
+          const dateString = now.toISOString().split("T")[0];
           const timeString = now.toLocaleTimeString();
 
           if (finalProb >= 80 && node.prob < 80)
@@ -59,19 +61,20 @@ export default function RealTimeMonitoring() {
             addSensorRecord({
               id: node.id,
               vibration: parseFloat(finalV.toFixed(3)),
-              current: node.current,
+              current: finalC,
               prob: finalProb,
               label: finalProb >= 80 ? 1 : 0,
-              date: dateString, // 날짜 전송
-              time: timeString, // 시간 전송
+              date: dateString,
+              time: timeString,
             });
           }
 
           return {
             ...node,
             vibration: parseFloat(finalV.toFixed(3)),
+            current: finalC,
             prob: finalProb,
-            history: [...node.history.slice(1), { val: finalV }],
+            history: [...node.history.slice(1), { vib: finalV, cur: finalC }],
           };
         }),
       );
@@ -93,76 +96,95 @@ export default function RealTimeMonitoring() {
       </Header>
 
       <GridContainer>
-        {nodes.map((node) => (
-          <NodeCard key={node.id} $isDanger={node.prob >= 70}>
-            <NodeHeader>
-              <NodeInfo>
-                <NodeID>{node.id}</NodeID>
-                <NodeName>{node.name}</NodeName>
-              </NodeInfo>
-              <Badge
-                $type={
-                  node.prob >= 70
-                    ? "danger"
-                    : node.prob >= 40
-                      ? "warning"
-                      : "success"
-                }
-              >
-                {node.prob >= 70 ? "위험" : node.prob >= 40 ? "경고" : "정상"}
-              </Badge>
-            </NodeHeader>
-            <ContentRow>
-              <MainValue>
-                <Label>진동 수치</Label>
-                <Value $isDanger={node.vibration >= 0.1}>
-                  {node.vibration} <Unit>mm/s</Unit>
-                </Value>
-              </MainValue>
-            </ContentRow>
-            <LargeChartContainer>
-              <ResponsiveContainer width="100%" height={90}>
-                <LineChart data={node.history}>
-                  <Line
-                    type="monotone"
-                    dataKey="val"
-                    stroke={node.prob >= 70 ? "var(--error)" : "var(--main)"}
-                    strokeWidth={3}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <YAxis hide domain={["auto", "auto"]} />
-                </LineChart>
-              </ResponsiveContainer>
-            </LargeChartContainer>
-            <SubDataGrid>
-              <SubItem>
-                <Label>전류량</Label>
-                <SubValue>{node.current} A</SubValue>
-              </SubItem>
-              <SubItem>
-                <Label>고장확률</Label>
-                <SubValue>{node.prob}%</SubValue>
-              </SubItem>
-              <SubItem>
-                <Label>현재 상태</Label>
-                <SubValue
-                  style={{
-                    color: node.prob >= 70 ? "var(--error)" : "var(--font2)",
-                  }}
+        {nodes.map((node) => {
+          const isVibDanger = node.vibration >= 0.1;
+          const isCurDanger = Math.abs(node.current - 2.1) >= 0.5;
+
+          return (
+            <NodeCard key={node.id} $isDanger={node.prob >= 70}>
+              <NodeHeader>
+                <NodeInfo>
+                  <NodeID>{node.id}</NodeID>
+                  <NodeName>{node.name}</NodeName>
+                </NodeInfo>
+                <Badge
+                  $type={
+                    node.prob >= 70
+                      ? "danger"
+                      : node.prob >= 40
+                        ? "warning"
+                        : "success"
+                  }
                 >
-                  {node.prob >= 70 ? "점검 요망" : "이상 없음"}
-                </SubValue>
-              </SubItem>
-            </SubDataGrid>
-            <ProgressBarBg>
-              <ProgressBarFill
-                $width={node.prob}
-                $color={node.prob >= 70 ? "var(--error)" : "var(--main)"}
-              />
-            </ProgressBarBg>
-          </NodeCard>
-        ))}
+                  {node.prob >= 70 ? "위험" : node.prob >= 40 ? "경고" : "정상"}
+                </Badge>
+              </NodeHeader>
+
+              <ContentRow>
+                <MainValue>
+                  <Label>진동 수치</Label>
+                  <Value $isDanger={isVibDanger}>
+                    {node.vibration} <Unit>mm/s</Unit>
+                  </Value>
+                </MainValue>
+                <MainValue>
+                  <Label>전류량</Label>
+                  <Value $isDanger={isCurDanger}>
+                    {node.current} <Unit>A</Unit>
+                  </Value>
+                </MainValue>
+              </ContentRow>
+
+              <LargeChartContainer>
+                <ResponsiveContainer width="100%" height={90}>
+                  <LineChart data={node.history}>
+                    <Line
+                      type="monotone"
+                      dataKey="vib"
+                      stroke={isVibDanger ? "var(--error)" : "var(--main)"}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cur"
+                      stroke={isCurDanger ? "var(--error)" : "var(--waiting)"}
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                    <YAxis hide domain={["auto", "auto"]} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </LargeChartContainer>
+
+              <SubDataGrid>
+                <SubItem>
+                  <Label>고장확률</Label>
+                  <SubValue>{node.prob}%</SubValue>
+                </SubItem>
+                <SubItem>
+                  <Label>현재 상태</Label>
+                  <SubValue
+                    style={{
+                      color: node.prob >= 70 ? "var(--error)" : "var(--font2)",
+                    }}
+                  >
+                    {node.prob >= 70 ? "점검 요망" : "이상 없음"}
+                  </SubValue>
+                </SubItem>
+              </SubDataGrid>
+
+              <ProgressBarBg>
+                <ProgressBarFill
+                  $width={node.prob}
+                  $color={node.prob >= 70 ? "var(--error)" : "var(--main)"}
+                />
+              </ProgressBarBg>
+            </NodeCard>
+          );
+        })}
       </GridContainer>
 
       {alerts.length > 0 && (
@@ -230,13 +252,14 @@ const RightControls = styled.div`
   align-items: center;
   gap: 20px;
 `;
+const Highlight = styled.span`
+  color: var(--font);
+  font-weight: 700;
+`;
 const StatusSummary = styled.div`
   font-size: 14px;
-  color: #64748b;
-`;
-const Highlight = styled.span`
-  color: #0f172a;
-  font-weight: 700;
+  color: var(--font2);
+  padding-right: 10px;
 `;
 const GridContainer = styled.div`
   display: grid;
@@ -251,6 +274,9 @@ const NodeCard = styled.div`
     ${(props) => (props.$isDanger ? "#fecaca" : "var(--border)")};
   box-shadow: var(--shadow);
   transition: transform 0.2s;
+  &:hover {
+    transform: translateY(-4px);
+  }
 `;
 const NodeHeader = styled.div`
   display: flex;
@@ -289,7 +315,7 @@ const Badge = styled.div`
 `;
 const ContentRow = styled.div`
   display: flex;
-  flex-direction: column;
+  gap: 24px;
   margin-bottom: 10px;
 `;
 const MainValue = styled.div``;
@@ -302,7 +328,7 @@ const Label = styled.div`
 const Value = styled.div`
   font-size: 24px;
   font-weight: var(--bold);
-  color: ${(props) => (props.$isDanger ? "var(--error)" : "var(--font)")};
+  color: ${(props) => (props.$isDanger ? "#ef4444" : "var(--font)")};
 `;
 const Unit = styled.span`
   font-size: var(--fontXs);
@@ -317,13 +343,12 @@ const LargeChartContainer = styled.div`
 `;
 const SubDataGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   padding-top: 12px;
   border-top: 1px solid var(--border);
   margin-bottom: 12px;
 `;
 const SubItem = styled.div``;
-
 const SubValue = styled.div`
   font-size: var(--fontSm);
   font-weight: var(--bold);
@@ -341,8 +366,6 @@ const ProgressBarFill = styled.div`
   background-color: ${(props) => props.$color};
   transition: width 0.5s ease-in-out;
 `;
-
-/* 검은색 모달 오버레이 스타일 유지 */
 const AlertModalOverlay = styled.div`
   position: fixed;
   top: 0;

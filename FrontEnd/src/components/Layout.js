@@ -27,13 +27,11 @@ const Layout = ({ children, toggleTheme }) => {
     setGlobalNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
-  // 실시간 센서 레코드 추가 함수 (최신 100개 유지)
   const addSensorRecord = (record) => {
-    setSensorHistory((prev) => [record, ...prev].slice(0, 100));
+    setSensorHistory((prev) => [record, ...prev].slice(0, 1000));
   };
 
   return (
-    // value에 모든 데이터와 함수를 담아서 전달 (중요!)
     <NotificationContext.Provider
       value={{
         notifications: globalNotifications,
