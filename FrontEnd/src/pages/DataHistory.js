@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useContext, useMemo, useEffect } from "react";
 import styled from "styled-components";
 import {
   Area,
@@ -12,691 +12,615 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-
-// 테이블용 가상 데이터
-const initialMotors = [
-  { id: "M-101", vibration: 0.02, current: 2.1, prob: 2, label: 0 },
-  { id: "M-102", vibration: 0.03, current: 2.2, prob: 5, label: 0 },
-  { id: "M-103", vibration: 0.18, current: 3.4, prob: 92, label: 1 },
-];
-
-// 그래프용 가상 데이터
-const dummyChartData = [
-  { time: "09:00", vibration: 0.02, current: 2.1 },
-  { time: "10:00", vibration: 0.03, current: 2.2 },
-  { time: "11:00", vibration: 0.05, current: 2.5 },
-  { time: "12:00", vibration: 0.08, current: 2.8 },
-  { time: "13:00", vibration: 0.12, current: 3.0 },
-  { time: "14:00", vibration: 0.18, current: 3.4 },
-];
+import { NotificationContext } from "../components/Layout";
 
 export default function DataHistory() {
-  const [motorData, setMotorData] = useState(initialMotors);
-  const [chartData, setChartData] = useState(dummyChartData);
-  const [alertLogs, setAlertLogs] = useState([
-    {
-      time: "10:15:22",
-      message: "M-103 모터 진동 이상 감지 (고장 확률 92%)",
-    },
-  ]);
-  const [isDragging, setIsDragging] = useState(false);
+  const { sensorHistory = [] } = useContext(NotificationContext);
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const [selectedDevice, setSelectedDevice] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
+
+  // 필터링 로직
+  const filteredHistory = useMemo(() => {
+    return sensorHistory.filter((item) => {
+      const matchDevice = selectedDevice === "" || item.id === selectedDevice;
+      const itemDate = item.date;
+      const matchDate =
+        (!startDate || itemDate >= startDate) &&
+        (!endDate || itemDate <= endDate);
+      return matchDevice && matchDate;
+    });
+  }, [sensorHistory, selectedDevice, startDate, endDate]);
+
+  const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
+  const currentItems = useMemo(() => {
+    const lastIndex = currentPage * itemsPerPage;
+    const firstIndex = lastIndex - itemsPerPage;
+    return filteredHistory.slice(firstIndex, lastIndex);
+  }, [filteredHistory, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDevice, startDate, endDate]);
+
+  const total = filteredHistory.length;
+
+  const dangerCount = filteredHistory.filter((m) => m.prob >= 70).length;
+  const warningCount = filteredHistory.filter(
+    (m) => m.prob >= 30 && m.prob < 70,
+  ).length;
+  const successCount = filteredHistory.filter((m) => m.prob < 30).length;
+
+  const chartData = [...filteredHistory].slice(0, 20).reverse();
+
+  const deviceList = useMemo(() => {
+    const ids = sensorHistory.map((item) => item.id);
+    return [...new Set(ids)].sort();
+  }, [sensorHistory]);
+
+  // AI 상태 및 색상 판정 헬퍼 함수
+  const getStatusInfo = (prob) => {
+    if (prob >= 70) return { text: "위험", type: "danger" };
+    if (prob >= 30) return { text: "주의", type: "warning" };
+    return { text: "정상", type: "success" };
   };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files.length > 0) processCSVFile(files[0]);
-  };
-
-  const handleFileChange = (e) => {
-    const files = e.target.files;
-    if (files.length > 0) processCSVFile(files[0]);
-  };
-
-  const processCSVFile = (file) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target.result;
-      const lines = text.split("\n").filter((line) => line.trim() !== "");
-
-      const newMotors = [];
-      const newLogs = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(",");
-        if (cols.length >= 2) {
-          const v = parseFloat(cols[0]);
-          const c = parseFloat(cols[1]);
-
-          let probability = 5;
-          let newLabel = 0;
-
-          if (v >= 0.1) {
-            probability = Math.floor(Math.random() * 20) + 80;
-            newLabel = 1;
-          }
-
-          const id = `M-${Math.floor(Math.random() * 900) + 100}`;
-          newMotors.push({
-            id,
-            vibration: v,
-            current: c,
-            prob: probability,
-            label: newLabel,
-          });
-
-          if (newLabel === 1) {
-            const now = new Date();
-            const timeString = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-            newLogs.push({
-              time: timeString,
-              message: `${id} 모터 이상 징후 감지! (고장 확률 ${probability}%)`,
-            });
-          }
-        }
-      }
-
-      setMotorData((prev) => [...prev, ...newMotors]);
-      if (newLogs.length > 0) setAlertLogs((prev) => [...newLogs, ...prev]);
-    };
-    reader.readAsText(file);
-  };
-
-  const total = motorData.length;
-  const faults = motorData.filter((m) => m.label === 1).length;
 
   return (
     <PageContainer>
       <Header>
         <div>
           <Title>데이터 예측 및 점검 이력 관리</Title>
-          <Subtitle>CSV 데이터 업로드 및 개별 예측 로그 조회</Subtitle>
+          <Subtitle>
+            실시간 수집 데이터 분석 및 AI 예측 로그 통합 저장소
+          </Subtitle>
         </div>
       </Header>
 
-      <LayoutGrid>
-        <LeftPanel>
-          <FilterCard>
-            <div>
-              <CardTitle>특정 장비 이력 조회</CardTitle>
-              <FormGroup>
-                <FormLabel>모터 ID 선택</FormLabel>
-                <FormSelect>
-                  <option value="">모터를 선택하세요 (ex: M-101)</option>
-                  <option value="M-101">M-101 (컨베이어)</option>
-                  <option value="M-102">M-102 (조립로봇)</option>
-                  <option value="M-103">M-103 (냉각팬)</option>
-                </FormSelect>
-              </FormGroup>
-              <FormGroup>
-                <FormLabel>시작 날짜</FormLabel>
-                <FormInput type="date" />
-              </FormGroup>
-              <FormGroup>
-                <FormLabel>종료 날짜</FormLabel>
-                <FormInput type="date" />
-              </FormGroup>
-            </div>
-            <SearchButton
-              onClick={() =>
-                alert(
-                  "백엔드 API (GET /api/current_history 등) 연동 예정입니다.",
-                )
-              }
-            >
-              과거 이력 데이터 조회
-            </SearchButton>
-          </FilterCard>
-        </LeftPanel>
+      <KpiGrid>
+        <KpiCard>
+          <KpiLabel>조회된 데이터</KpiLabel>
+          <KpiValue>{total.toLocaleString()} 건</KpiValue>
+        </KpiCard>
+        <KpiCard>
+          <KpiLabel>정상 판정 (30% 미만)</KpiLabel>
+          <KpiValue $color="var(--main)">
+            {successCount.toLocaleString()} 건
+          </KpiValue>
+        </KpiCard>
+        <KpiCard>
+          <KpiLabel>주의 요망 (30% ~ 70%)</KpiLabel>
+          <KpiValue $color="var(--waiting)">
+            {warningCount.toLocaleString()} 건
+          </KpiValue>
+        </KpiCard>
+        <KpiCard $isAlert={dangerCount > 0}>
+          <KpiLabel>위험 감지 (70% 이상)</KpiLabel>
+          <KpiValue $color="var(--error)">
+            {dangerCount.toLocaleString()} 건
+          </KpiValue>
+        </KpiCard>
+      </KpiGrid>
 
-        <RightPanel>
-          <ChartCard>
-            <CardTitle>과거 센서 복합 데이터 추이 (전류 및 진동)</CardTitle>
-            <ChartWrapper>
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart
-                  data={chartData}
-                  margin={{ top: 20, right: 20, left: -20, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient
-                      id="colorCurrent"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="4 4"
-                    vertical={false}
-                    stroke="var(--border)"
-                  />
-                  <XAxis
-                    dataKey="time"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: "var(--font2)" }}
-                    dy={10}
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: "var(--font2)" }}
-                    dx={-10}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: "var(--font2)" }}
-                    dx={10}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--background)",
-                      borderRadius: "8px",
-                      border: "1px solid var(--border)",
-                      boxShadow: "var(--shadow)",
-                      fontSize: "13px",
-                      color: "var(--font)",
-                    }}
-                  />
-                  <Legend
-                    wrapperStyle={{
-                      fontSize: "13px",
-                      color: "var(--font2)",
-                      paddingTop: "20px",
-                    }}
-                    iconType="circle"
-                  />
-                  <ReferenceLine
-                    yAxisId="right"
-                    y={0.1}
-                    stroke="var(--error)"
-                    strokeDasharray="4 4"
-                    label={{
-                      position: "insideTopLeft",
-                      value: "위험 임계치 (0.1)",
-                      fill: "var(--error)",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Area
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="current"
-                    name="전류량 (A)"
-                    fillOpacity={1}
-                    fill="url(#colorCurrent)"
-                    stroke="var(--main)"
-                    strokeWidth={3}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="vibration"
-                    name="진동 수치 (mm/s)"
-                    stroke="var(--error)"
-                    strokeWidth={3}
-                    dot={{ r: 0 }}
-                    activeDot={{
-                      r: 6,
-                      fill: "var(--error)",
-                      stroke: "var(--background)",
-                      strokeWidth: 2,
-                    }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </ChartWrapper>
-          </ChartCard>
-        </RightPanel>
-      </LayoutGrid>
-
-      <LayoutGrid>
-        <LeftPanel>
-          <Card>
-            <CardTitle>센서 이력 데이터 일괄 업로드 (CSV)</CardTitle>
-            <DropZone
-              $isDragging={isDragging}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <FileInput
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-              />
-              <DropText>클릭하거나 CSV 파일을 이곳에 드롭하세요</DropText>
-              <DropSubText>형식: vibration, current</DropSubText>
-            </DropZone>
-          </Card>
-
-          <Card>
-            <CardTitle>업로드 데이터 분석 로그</CardTitle>
-            <LogContainer>
-              {alertLogs.map((log, index) => (
+      <MainAnalysisGrid>
+        <ChartSection>
+          <SectionTitle>
+            {selectedDevice
+              ? `${selectedDevice} 데이터 추이`
+              : "최근 수집 장비 추이 분석"}
+          </SectionTitle>
+          <ChartWrapper>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="colorCurrent" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="var(--border)"
+                />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10, fill: "var(--font2)" }}
+                />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11 }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "none",
+                    boxShadow: "var(--shadow)",
+                  }}
+                  labelFormatter={(value) => `측정 시간: ${value}`}
+                />
+                <Legend iconType="circle" />
+                <ReferenceLine
+                  yAxisId="right"
+                  y={0.1}
+                  stroke="var(--error)"
+                  strokeDasharray="5 5"
+                  label={{
+                    value: "임계치",
+                    fill: "var(--error)",
+                    fontSize: 10,
+                  }}
+                />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="current"
+                  name="전류(A)"
+                  fill="url(#colorCurrent)"
+                  stroke="var(--main)"
+                  strokeWidth={2}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="vibration"
+                  name="진동"
+                  stroke="var(--error)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartWrapper>
+        </ChartSection>
+        <LogSection>
+          <SectionTitle>위험 감지 타임라인</SectionTitle>
+          <LogContainer>
+            {filteredHistory
+              .filter((item) => item.prob >= 70)
+              .map((log, index) => (
                 <LogBox key={index}>
-                  <LogTime>{log.time}</LogTime>
-                  <LogText>{log.message}</LogText>
+                  <LogTime>
+                    {log.date} {log.time}
+                  </LogTime>
+                  <LogText>
+                    <strong>{log.id}</strong>: 진동 이상 ({log.prob}%)
+                  </LogText>
                 </LogBox>
               ))}
-              {alertLogs.length === 0 && (
-                <EmptyLogMessage>감지된 위험 내역이 없습니다.</EmptyLogMessage>
-              )}
-            </LogContainer>
-          </Card>
-        </LeftPanel>
+            {filteredHistory.filter((item) => item.prob >= 70).length === 0 && (
+              <EmptyMsg>감지된 내역이 없습니다.</EmptyMsg>
+            )}
+          </LogContainer>
+        </LogSection>
+      </MainAnalysisGrid>
 
-        <RightPanel>
-          <KpiRow>
-            <KpiBox>
-              <KpiLabel>분석 완료 모터</KpiLabel>
-              <KpiValue>{total} 대</KpiValue>
-            </KpiBox>
-            <KpiBox>
-              <KpiLabel>정상 가동</KpiLabel>
-              <KpiValue $color="var(--main)">{total - faults} 대</KpiValue>
-            </KpiBox>
-            <KpiBox>
-              <KpiLabel>고장 위험</KpiLabel>
-              <KpiValue $color="var(--error)">{faults} 대</KpiValue>
-            </KpiBox>
-          </KpiRow>
-
-          <TableCard>
-            <CardTitle>업로드 데이터 분석 상세 현황</CardTitle>
-            <TableWrapper>
-              <StyledTable>
-                <thead>
-                  <tr>
-                    <Th>모터 ID</Th>
-                    <Th>진동 (임계치 0.1)</Th>
-                    <Th>전류</Th>
-                    <Th>고장 확률</Th>
-                    <Th>AI 판정</Th>
+      <TableSection>
+        <TableTopHeader>
+          <SectionTitle style={{ marginBottom: 0 }}>
+            전체 데이터 로그 이력
+          </SectionTitle>
+          <InnerFilterBar>
+            <FilterGroup>
+              <FilterLabel>장비 ID</FilterLabel>
+              <FilterSelect
+                value={selectedDevice}
+                onChange={(e) => setSelectedDevice(e.target.value)}
+              >
+                <option value="">전체 모터</option>
+                {deviceList.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </FilterSelect>
+            </FilterGroup>
+            <FilterGroup>
+              <FilterLabel>조회 기간</FilterLabel>
+              <DateInputGroup>
+                <FormInput
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+                <Separator>~</Separator>
+                <FormInput
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </DateInputGroup>
+            </FilterGroup>
+            <ResetButton
+              onClick={() => {
+                setSelectedDevice("");
+                setStartDate("");
+                setEndDate("");
+              }}
+            >
+              초기화
+            </ResetButton>
+          </InnerFilterBar>
+        </TableTopHeader>
+        <TableWrapper>
+          <StyledTable>
+            <thead>
+              <tr>
+                <Th>장비 ID</Th>
+                <Th>측정 날짜</Th>
+                <Th>측정 시간</Th>
+                <Th>진동 수치</Th>
+                <Th>전류 수치</Th>
+                <Th>고장 확률</Th>
+                <Th>AI 상태</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentItems.map((motor, index) => {
+                const status = getStatusInfo(motor.prob);
+                return (
+                  <tr key={index}>
+                    <IdCell>{motor.id}</IdCell>
+                    <Td>{motor.date}</Td>
+                    <Td>{motor.time}</Td>
+                    <VibCell $isHigh={motor.vibration >= 0.1}>
+                      {motor.vibration} mm/s
+                    </VibCell>
+                    <Td>{motor.current} A</Td>
+                    <Td>
+                      <ProbContainer>
+                        <BarBg>
+                          <BarFill
+                            $val={motor.prob}
+                            $color={
+                              status.type === "danger"
+                                ? "var(--error)"
+                                : status.type === "warning"
+                                  ? "var(--waiting)"
+                                  : "var(--run)"
+                            }
+                          />
+                        </BarBg>
+                        <ProbText>{motor.prob}%</ProbText>
+                      </ProbContainer>
+                    </Td>
+                    <Td>
+                      <StatusBadge $status={status.type}>
+                        {status.text}
+                      </StatusBadge>
+                    </Td>
                   </tr>
-                </thead>
-                <tbody>
-                  {motorData.map((motor, index) => {
-                    const isDanger = motor.prob >= 70;
-                    const isWarning = motor.prob >= 30 && motor.prob < 70;
-                    const probColor = isDanger
-                      ? "var(--error)"
-                      : isWarning
-                        ? "var(--waiting)"
-                        : "var(--run)";
+                );
+              })}
+            </tbody>
+          </StyledTable>
+          {filteredHistory.length === 0 && (
+            <EmptyMsg style={{ marginTop: "50px" }}>
+              일치하는 데이터가 없습니다.
+            </EmptyMsg>
+          )}
+        </TableWrapper>
 
-                    return (
-                      <tr key={index}>
-                        <IdCell>{motor.id}</IdCell>
-                        <VibrationCell $isHigh={motor.vibration >= 0.1}>
-                          {motor.vibration}
-                        </VibrationCell>
-                        <Td>{motor.current} A</Td>
-                        <Td>
-                          <ProbWrapper>
-                            <BarBg>
-                              <BarFill $val={motor.prob} $color={probColor} />
-                            </BarBg>
-                            <ProbText $color={probColor}>
-                              {motor.prob}%
-                            </ProbText>
-                          </ProbWrapper>
-                        </Td>
-                        <Td>
-                          <StatusBadge $isFault={motor.label === 1}>
-                            {motor.label === 1 ? "위험 (1)" : "정상 (0)"}
-                          </StatusBadge>
-                        </Td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </StyledTable>
-            </TableWrapper>
-          </TableCard>
-        </RightPanel>
-      </LayoutGrid>
+        {totalPages > 1 && (
+          <PaginationContainer>
+            <PageBtn
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              &lt;
+            </PageBtn>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+              <PageNum
+                key={num}
+                $active={currentPage === num}
+                onClick={() => setCurrentPage(num)}
+              >
+                {num}
+              </PageNum>
+            ))}
+            <PageBtn
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              disabled={currentPage === totalPages}
+            >
+              &gt;
+            </PageBtn>
+          </PaginationContainer>
+        )}
+      </TableSection>
     </PageContainer>
   );
 }
 
 const PageContainer = styled.div`
-  width: 100%;
   padding: 30px;
-  box-sizing: border-box;
   background-color: var(--background2);
-  min-height: calc(100vh - 50px);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
 `;
-
 const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-  width: 100%;
-`;
-
-const Title = styled.h1`
-  font-size: var(--fontTitle, 26px);
-  color: var(--font);
-  font-weight: 800;
-  margin: 0 0 8px 0;
-`;
-
-const Subtitle = styled.div`
-  font-size: var(--fontSm);
-  color: var(--font2);
-  margin: 0;
-`;
-
-const LayoutGrid = styled.div`
-  display: flex;
-  gap: 20px;
-  margin-bottom: 24px;
-  width: 100%;
-  align-items: stretch;
-`;
-
-const LeftPanel = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`;
-
-const RightPanel = styled.div`
-  flex: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-`;
-
-const FilterCard = styled.div`
-  background-color: var(--background);
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 100%;
-`;
-
-const ChartCard = styled.div`
-  background-color: var(--background);
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  box-sizing: border-box;
-  height: 100%;
-`;
-
-const ChartWrapper = styled.div`
-  height: 300px;
-  width: 100%;
-`;
-
-const FormGroup = styled.div`
-  margin-bottom: 16px;
-`;
-
-const FormLabel = styled.label`
-  display: block;
-  font-size: var(--fontXs);
-  color: var(--font2);
-  font-weight: var(--bold);
-  margin-bottom: 8px;
-`;
-
-const FormSelect = styled.select`
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: var(--fontSm);
-  background-color: var(--background);
-  color: var(--font);
-  box-sizing: border-box;
-  outline: none;
-
-  &:focus {
-    border-color: var(--main);
-  }
-`;
-
-const FormInput = styled.input`
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: var(--fontSm);
-  background-color: var(--background);
-  color: var(--font);
-  box-sizing: border-box;
-
-  &:focus {
-    border-color: var(--main);
-  }
-`;
-
-const SearchButton = styled.button`
-  width: 100%;
-  padding: 12px;
-  background-color: var(--main);
-  color: var(--font3);
-  border: none;
-  border-radius: 8px;
-  font-size: var(--fontSm);
-  font-weight: var(--bold);
-  margin-top: 10px;
-
-  &:hover {
-    opacity: 0.9;
-  }
-`;
-
-const Card = styled.div`
-  background-color: var(--background);
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  box-sizing: border-box;
-`;
-
-const CardTitle = styled.h2`
-  font-size: var(--fontLg);
-  color: var(--font);
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 10px;
-  margin: 0 0 15px 0;
-  font-weight: var(--bold);
-`;
-
-const DropZone = styled.label`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  box-sizing: border-box;
-  border: 2px dashed
-    ${(props) => (props.$isDragging ? "var(--main)" : "var(--border)")};
-  background-color: ${(props) =>
-    props.$isDragging ? "#eff6ff" : "var(--background)"};
-  border-radius: 8px;
-  padding: 30px 20px;
-  color: var(--font2);
-  cursor: pointer;
-  transition: all 0.3s ease;
-`;
-
-const FileInput = styled.input`
-  display: none;
-`;
-
-const DropText = styled.div`
-  font-size: var(--fontSm);
-  font-weight: var(--bold);
-  color: var(--font);
   margin-bottom: 5px;
 `;
-
-const DropSubText = styled.div`
-  font-size: var(--fontXs);
-  color: var(--font2);
-`;
-
-const LogContainer = styled.div`
-  max-height: 250px;
-  overflow-y: auto;
-`;
-
-const LogBox = styled.div`
-  padding: 10px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-  border-bottom: 1px solid var(--border);
-`;
-
-const LogTime = styled.div`
-  font-size: var(--fontXxs);
-  color: var(--font2);
-  margin-bottom: 3px;
-`;
-
-const LogText = styled.p`
-  font-size: var(--fontXs);
-  color: var(--error);
+const Title = styled.h1`
+  font-size: 24px;
+  color: var(--font);
+  font-weight: 800;
   margin: 0;
 `;
-
-const EmptyLogMessage = styled.div`
-  font-size: var(--fontXs);
+const Subtitle = styled.div`
+  font-size: 14px;
   color: var(--font2);
+  margin-top: 5px;
 `;
-
-const KpiRow = styled.div`
-  display: flex;
-  gap: 15px;
-  width: 100%;
+const KpiGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
 `;
-
-const KpiBox = styled.div`
-  flex: 1;
-  padding: 15px;
-  border-radius: 8px;
-  background-color: ${(props) => props.$bg || "var(--background)"};
-  text-align: center;
-  border: 1px solid ${(props) => props.$borderColor || "var(--border)"};
+const KpiCard = styled.div`
+  background: var(--background);
+  padding: 20px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
 `;
-
 const KpiLabel = styled.div`
-  font-size: var(--fontXs);
-  color: ${(props) => props.$color || "var(--font2)"};
+  font-size: 15px;
+  color: var(--font2);
+  margin-bottom: 8px;
+  font-weight: 600;
 `;
-
 const KpiValue = styled.div`
   font-size: 28px;
-  font-weight: var(--bold);
+  font-weight: 800;
   color: ${(props) => props.$color || "var(--font)"};
-  margin: 5px 0 0 0;
+  margin-top: 10px;
 `;
-
-const TableCard = styled(Card)`
-  flex: 1;
+const TableSection = styled.div`
+  background: var(--background);
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
 `;
-
-const TableWrapper = styled.div`
-  max-height: 350px;
+const TableTopHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+`;
+const InnerFilterBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 20px;
+`;
+const FilterGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+const FilterLabel = styled.label`
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--font2);
+  white-space: nowrap;
+`;
+const FilterSelect = styled.select`
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  outline: none;
+  background: var(--background);
+`;
+const DateInputGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+`;
+const FormInput = styled.input`
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+`;
+const Separator = styled.span`
+  color: var(--font2);
+  font-size: 12px;
+`;
+const ResetButton = styled.button`
+  background: var(--background2);
+  color: var(--font);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  &:hover {
+    background: var(--border);
+  }
+`;
+const MainAnalysisGrid = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 25px;
+`;
+const SectionTitle = styled.h3`
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 15px;
+  color: var(--font);
+`;
+const ChartSection = styled.div`
+  background: var(--background);
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+`;
+const ChartWrapper = styled.div`
+  height: 300px;
+`;
+const LogSection = styled.div`
+  background: var(--background);
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+`;
+const LogContainer = styled.div`
+  height: 300px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 `;
-
+const LogBox = styled.div`
+  padding: 12px;
+  background: var(--background);
+  border-radius: 4px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+`;
+const LogTime = styled.div`
+  font-size: 10px;
+  color: var(--font2);
+`;
+const LogText = styled.div`
+  font-size: 12px;
+  margin-top: 4px;
+`;
+const EmptyMsg = styled.div`
+  color: var(--font2);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 100px;
+`;
+const TableWrapper = styled.div`
+  max-height: 480px;
+  overflow-y: auto;
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+`;
 const StyledTable = styled.table`
   width: 100%;
   border-collapse: collapse;
-  text-align: left;
 `;
-
 const Th = styled.th`
-  padding: 12px;
-  background-color: var(--background2);
+  text-align: left;
+  padding: 15px;
+  background: var(--background2);
+  font-size: 12px;
   color: var(--font2);
-  font-size: var(--fontXs);
-  border-bottom: 2px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
+  border-bottom: 2px solid var(--border);
 `;
-
 const Td = styled.td`
-  padding: 12px;
-  color: var(--font);
-  font-size: var(--fontSm);
+  padding: 15px;
   border-bottom: 1px solid var(--border);
+  font-size: 13px;
 `;
-
 const IdCell = styled(Td)`
-  font-weight: var(--bold);
+  font-weight: 700;
+  color: var(--main);
 `;
-
-const VibrationCell = styled(Td)`
+const VibCell = styled(Td)`
   color: ${(props) => (props.$isHigh ? "var(--error)" : "var(--font)")};
-  font-weight: ${(props) => (props.$isHigh ? "var(--bold)" : "var(--normal)")};
+  font-weight: ${(props) => (props.$isHigh ? 800 : 400)};
 `;
-
-const ProbWrapper = styled.div`
+const ProbContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 `;
-
 const ProbText = styled.span`
-  color: ${(props) => props.$color};
-  font-weight: var(--bold);
-  font-size: var(--fontXs);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 35px;
 `;
-
-const StatusBadge = styled.span`
-  padding: 5px 10px;
-  border-radius: 20px;
-  font-size: var(--fontXs);
-  font-weight: var(--bold);
-  background-color: ${(props) =>
-    props.$isFault ? "var(--bgError)" : "var(--bgRun)"};
-  color: ${(props) => (props.$isFault ? "var(--error)" : "var(--run)")};
-`;
-
 const BarBg = styled.div`
-  width: 100px;
+  width: 80px;
   height: 6px;
-  background-color: var(--border);
+  background: var(--border);
   border-radius: 3px;
   overflow: hidden;
 `;
-
 const BarFill = styled.div`
-  width: ${(props) => props.$val}%;
   height: 100%;
-  background-color: ${(props) => props.$color};
+  width: ${(props) => props.$val}%;
+  background: ${(props) => props.$color};
+`;
+
+const StatusBadge = styled.span`
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  background-color: ${(props) =>
+    props.$status === "danger"
+      ? "var(--bgError)"
+      : props.$status === "warning"
+        ? "#fef3c7"
+        : "var(--bgRun)"};
+  color: ${(props) =>
+    props.$status === "danger"
+      ? "var(--error)"
+      : props.$status === "warning"
+        ? "var(--waiting)"
+        : "var(--run)"};
+`;
+
+const PaginationContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 25px;
+`;
+const PageBtn = styled.button`
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--font);
+  cursor: pointer;
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+const PageNum = styled.button`
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid
+    ${(props) => (props.$active ? "var(--main)" : "var(--border)")};
+  background: ${(props) =>
+    props.$active ? "var(--main)" : "var(--background)"};
+  color: ${(props) => (props.$active ? "white" : "var(--font)")};
+  font-weight: 700;
+  cursor: pointer;
+  &:hover {
+    background: ${(props) =>
+      props.$active ? "var(--main)" : "var(--background2)"};
+  }
 `;

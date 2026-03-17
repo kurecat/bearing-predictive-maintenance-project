@@ -17,7 +17,7 @@ const Navbar = () => {
           대시보드
         </MenuItem>
         <MenuItem to="/history" $isActive={path === "/history"}>
-          데이터 예측
+          데이터 예측 및 이력
         </MenuItem>
         <MenuItem to="/real-time" $isActive={path === "/real-time"}>
           실시간 모니터링

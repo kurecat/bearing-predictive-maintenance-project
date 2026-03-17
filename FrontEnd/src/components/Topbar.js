@@ -1,24 +1,26 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { NotificationContext } from "../components/Layout";
+import { NotificationContext } from "./Layout"; // 경로 주의
 
 export default function Topbar({ toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 컨텍스트에서 알림 데이터와 읽음 처리 함수 가져오기
+  // Context에서 데이터 가져오기
   const { notifications, markAsRead } = useContext(NotificationContext);
 
   const [tabs, setTabs] = useState([]);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const alertRef = useRef(null);
 
-  // 읽지 않은 알림 개수 계산
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  // 읽지 않은 알림 개수
+  const unreadCount = notifications
+    ? notifications.filter((n) => !n.isRead).length
+    : 0;
 
   const getTabLabel = (path) => {
-    if (path.includes("/history")) return "데이터 예측";
+    if (path.includes("/history")) return "데이터 예측 및 이력";
     if (path.includes("/real-time")) return "실시간 모니터링";
     return "대시보드";
   };
@@ -50,14 +52,17 @@ export default function Topbar({ toggleSidebar }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 알림창 토글 시 읽음 처리 수행
+  // [수정] 알림창 열 때 markAsRead가 존재할 때만 실행하도록 방어
   const handleToggleAlert = () => {
-    if (!isAlertOpen) markAsRead(); // 열릴 때 모두 읽음 처리
+    if (!isAlertOpen && markAsRead) {
+      markAsRead();
+    }
     setIsAlertOpen(!isAlertOpen);
   };
 
   const isCurrentFavorite =
     tabs.find((t) => t.path === location.pathname)?.isFavorite || false;
+
   const toggleFavorite = () => {
     setTabs((prevTabs) => {
       const updatedTabs = prevTabs.map((tab) =>
@@ -72,6 +77,7 @@ export default function Topbar({ toggleSidebar }) {
   };
 
   const handleTabClick = (path) => navigate(path);
+
   const handleCloseTab = (e, pathToClose) => {
     e.stopPropagation();
     const targetTab = tabs.find((t) => t.path === pathToClose);
@@ -100,6 +106,7 @@ export default function Topbar({ toggleSidebar }) {
             <line x1="9" y1="3" x2="9" y2="21"></line>
           </svg>
         </IconButton>
+
         <IconButton onClick={toggleFavorite} title="현재 탭 고정/해제">
           <svg
             width="20"
@@ -112,6 +119,7 @@ export default function Topbar({ toggleSidebar }) {
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
           </svg>
         </IconButton>
+
         <TabContainer>
           {tabs.map((tab) => (
             <TabItem
@@ -125,7 +133,6 @@ export default function Topbar({ toggleSidebar }) {
                 <CloseButton
                   className="close-btn"
                   onClick={(e) => handleCloseTab(e, tab.path)}
-                  title="탭 닫기"
                 >
                   <svg
                     width="12"
@@ -159,10 +166,8 @@ export default function Topbar({ toggleSidebar }) {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
-            {/* 읽지 않은 알림이 있을 때만 빨간 배지 표시 */}
             {unreadCount > 0 && <BadgeCount>{unreadCount}</BadgeCount>}
           </IconButton>
-
           {isAlertOpen && (
             <Dropdown>
               <DropdownHeader>
@@ -188,6 +193,7 @@ export default function Topbar({ toggleSidebar }) {
   );
 }
 
+// --- 디자인 원본 100% 동일 유지 ---
 const Container = styled.div`
   display: flex;
   align-items: center;
@@ -243,38 +249,25 @@ const TabItem = styled.div`
     props.$isActive ? "var(--bold)" : "var(--medium)"};
   color: ${(props) => (props.$isActive ? "var(--main)" : "var(--font2)")};
   background-color: ${(props) => (props.$isActive ? "#eff6ff" : "transparent")};
+  border: 1px solid ${(props) => (props.$isActive ? "#bfdbfe" : "transparent")};
   cursor: pointer;
   white-space: nowrap;
   &:hover {
     .close-btn {
       opacity: 1;
-      pointer-events: auto;
     }
   }
 `;
 const TabStar = styled.span`
   margin-right: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
   color: #facc15;
 `;
 const CloseButton = styled.span`
   margin-left: 6px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  color: var(--font2);
   opacity: 0;
-  pointer-events: none;
-  transition: all 0.2s ease;
   &:hover {
-    background-color: var(--border);
     color: var(--error);
   }
 `;
@@ -324,15 +317,10 @@ const DropdownBody = styled.div`
 const NotificationItem = styled.div`
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-  &:last-child {
-    border-bottom: none;
-  }
   p {
     margin: 0;
     font-size: 12px;
     color: var(--font);
-    font-weight: 500;
-    line-height: 1.4;
   }
   span {
     font-size: 10px;

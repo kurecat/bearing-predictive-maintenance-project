@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import styled, { keyframes } from "styled-components";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
-import { NotificationContext } from "../components/Layout"; // 경로 확인 필요
+import { NotificationContext } from "../components/Layout";
 
 const initialNodes = Array.from({ length: 9 }, (_, i) => ({
   id: `MTR-${101 + i}`,
@@ -14,12 +14,14 @@ const initialNodes = Array.from({ length: 9 }, (_, i) => ({
 
 export default function RealTimeMonitoring() {
   const [nodes, setNodes] = useState(initialNodes);
-  const { addNotification } = useContext(NotificationContext);
+  const { addNotification, addSensorRecord } = useContext(NotificationContext);
   const [alerts, setAlerts] = useState([]);
 
   const triggerAlert = (name, prob) => {
-    const time = new Date().toLocaleTimeString();
-    const newAlert = { id: Date.now(), name, prob, time };
+    const now = new Date();
+    const time = now.toLocaleTimeString();
+    const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const newAlert = { id: Date.now(), name, prob, time, date };
     setAlerts((prev) => [...prev, newAlert]);
 
     if (addNotification) {
@@ -44,8 +46,27 @@ export default function RealTimeMonitoring() {
           const isTarget = node.id === "MTR-105";
           const finalV = isTarget ? randV + 0.05 : randV;
           const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
+
+          // --- 날짜 및 시간 생성 (수정된 부분) ---
+          const now = new Date();
+          const dateString = now.toISOString().split("T")[0]; // "2026-03-17"
+          const timeString = now.toLocaleTimeString();
+
           if (finalProb >= 80 && node.prob < 80)
             triggerAlert(node.name, finalProb);
+
+          if (addSensorRecord) {
+            addSensorRecord({
+              id: node.id,
+              vibration: parseFloat(finalV.toFixed(3)),
+              current: node.current,
+              prob: finalProb,
+              label: finalProb >= 80 ? 1 : 0,
+              date: dateString, // 날짜 전송
+              time: timeString, // 시간 전송
+            });
+          }
+
           return {
             ...node,
             vibration: parseFloat(finalV.toFixed(3)),
@@ -56,7 +77,7 @@ export default function RealTimeMonitoring() {
       );
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [addSensorRecord]);
 
   return (
     <PageContainer>
@@ -66,8 +87,7 @@ export default function RealTimeMonitoring() {
         </TitleGroup>
         <RightControls>
           <StatusSummary>
-            시스템 가동률: <Highlight>98.2%</Highlight> | 전체 모터:{" "}
-            <Highlight>{nodes.length}대</Highlight>
+            전체 모터: <Highlight>{nodes.length}대</Highlight>
           </StatusSummary>
         </RightControls>
       </Header>
@@ -89,11 +109,7 @@ export default function RealTimeMonitoring() {
                       : "success"
                 }
               >
-                {node.prob >= 70
-                  ? "위험"
-                  : node.prob >= 40
-                    ? "경고"
-                    : "정상 가동"}
+                {node.prob >= 70 ? "위험" : node.prob >= 40 ? "경고" : "정상"}
               </Badge>
             </NodeHeader>
             <ContentRow>
@@ -126,11 +142,7 @@ export default function RealTimeMonitoring() {
               </SubItem>
               <SubItem>
                 <Label>고장확률</Label>
-                <SubValue
-                  style={{ color: "var(--main)", fontWeight: "var(--bold)" }}
-                >
-                  {node.prob}%
-                </SubValue>
+                <SubValue>{node.prob}%</SubValue>
               </SubItem>
               <SubItem>
                 <Label>현재 상태</Label>
@@ -239,11 +251,6 @@ const NodeCard = styled.div`
     ${(props) => (props.$isDanger ? "#fecaca" : "var(--border)")};
   box-shadow: var(--shadow);
   transition: transform 0.2s;
-  &:hover {
-    transform: translateY(-4px);
-  }
-  background-color: ${(props) =>
-    props.$isDanger ? "var(--bgError)" : "var(--background)"};
 `;
 const NodeHeader = styled.div`
   display: flex;
@@ -316,6 +323,7 @@ const SubDataGrid = styled.div`
   margin-bottom: 12px;
 `;
 const SubItem = styled.div``;
+
 const SubValue = styled.div`
   font-size: var(--fontSm);
   font-weight: var(--bold);
@@ -333,6 +341,8 @@ const ProgressBarFill = styled.div`
   background-color: ${(props) => props.$color};
   transition: width 0.5s ease-in-out;
 `;
+
+/* 검은색 모달 오버레이 스타일 유지 */
 const AlertModalOverlay = styled.div`
   position: fixed;
   top: 0;
