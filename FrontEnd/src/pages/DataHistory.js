@@ -23,8 +23,8 @@ export default function DataHistory() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
+  const pagesPerBlock = 10;
 
-  // 1. 테이블 및 KPI용 전체 필터링 로직
   const filteredHistory = useMemo(() => {
     return sensorHistory.filter((item) => {
       const matchDevice = selectedDevice === "" || item.id === selectedDevice;
@@ -47,6 +47,15 @@ export default function DataHistory() {
     setCurrentPage(1);
   }, [selectedDevice, startDate, endDate]);
 
+  const currentBlock = Math.ceil(currentPage / pagesPerBlock);
+  const startPage = (currentBlock - 1) * pagesPerBlock + 1;
+  const endPage = Math.min(startPage + pagesPerBlock - 1, totalPages);
+
+  const pageNumbers = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pageNumbers.push(i);
+  }
+
   const total = filteredHistory.length;
   const dangerCount = filteredHistory.filter((m) => m.prob >= 70).length;
   const warningCount = filteredHistory.filter(
@@ -54,27 +63,7 @@ export default function DataHistory() {
   ).length;
   const successCount = filteredHistory.filter((m) => m.prob < 30).length;
 
-  // 2. 그래프 전용 데이터 및 독립적 색상 계산 로직
-  const chartData = useMemo(() => {
-    const targetId =
-      selectedDevice || (sensorHistory.length > 0 ? sensorHistory[0].id : "");
-
-    return sensorHistory
-      .filter((item) => item.id === targetId)
-      .slice(0, 20)
-      .reverse();
-  }, [sensorHistory, selectedDevice]);
-
-  // --- [핵심 수정 부분] 최신 데이터를 기준으로 진동/전류 고장 확률 각각 계산 ---
-  const latestData = chartData[chartData.length - 1];
-
-  // 진동 독립 확률 계산 (임계치 0.2 기준)
-  const vibProb = latestData ? (latestData.vibration / 0.2) * 100 : 0;
-
-  // 전류 독립 확률 계산 (기준값 2.1A에서 ±0.5A 이격 시 100% 위험으로 간주)
-  const curProb = latestData
-    ? (Math.abs(latestData.current - 2.1) / 0.5) * 100
-    : 0;
+  const chartData = [...filteredHistory].slice(0, 20).reverse();
 
   const deviceList = useMemo(() => {
     const ids = sensorHistory.map((item) => item.id);
@@ -178,24 +167,22 @@ export default function DataHistory() {
                   }}
                 />
 
-                {/* [전류] : curProb가 70% 이상일 때만 var(--error) 적용 */}
                 <Area
                   yAxisId="left"
                   type="monotone"
                   dataKey="current"
                   name="전류(A)"
                   fill="url(#colorCurrent)"
-                  stroke={curProb >= 70 ? "var(--error)" : "var(--main)"}
+                  stroke="var(--main)"
                   strokeWidth={2}
                 />
 
-                {/* [진동] : vibProb가 70% 이상일 때만 var(--error) 적용. 전류 고장 여부와 무관함 */}
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="vibration"
                   name="진동"
-                  stroke={vibProb >= 70 ? "var(--error)" : "var(--waiting)"}
+                  stroke="var(--waiting)"
                   strokeWidth={2}
                   dot={false}
                 />
@@ -330,15 +317,22 @@ export default function DataHistory() {
             </EmptyMsg>
           )}
         </TableWrapper>
+
         {totalPages > 1 && (
           <PaginationContainer>
+            <PageBtn
+              onClick={() => setCurrentPage(Math.max(startPage - 1, 1))}
+              disabled={startPage === 1}
+            >
+              &lt;&lt;
+            </PageBtn>
             <PageBtn
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
             >
               &lt;
             </PageBtn>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+            {pageNumbers.map((num) => (
               <PageNum
                 key={num}
                 $active={currentPage === num}
@@ -355,6 +349,12 @@ export default function DataHistory() {
             >
               &gt;
             </PageBtn>
+            <PageBtn
+              onClick={() => setCurrentPage(Math.min(endPage + 1, totalPages))}
+              disabled={endPage === totalPages}
+            >
+              &gt;&gt;
+            </PageBtn>
           </PaginationContainer>
         )}
       </TableSection>
@@ -362,7 +362,6 @@ export default function DataHistory() {
   );
 }
 
-// --- 사용자 정의 CSS (수정 금지 준수) ---
 const PageContainer = styled.div`
   padding: 30px;
   background-color: var(--background2);
@@ -621,7 +620,9 @@ const PaginationContainer = styled.div`
   margin-top: 25px;
 `;
 const PageBtn = styled.button`
-  padding: 6px 12px;
+  padding: 2px 6px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--background);
