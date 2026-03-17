@@ -1,89 +1,219 @@
-from fastapi import FastAPI, Body
-from fastapi.middleware.cors import CORSMiddleware  # 미들웨어 모듈 
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+from bson import ObjectId
+from pymongo import MongoClient
 import uvicorn
-from motor.motor_asyncio import AsyncIOMotorClient
 
-def fix_objectid(document):
-    if not document:
-        return document
-    document["_id"] = str(document["_id"])
-    return document
+# === MongoDB 연결 ===
+client = MongoClient("mongodb://localhost:27017")
+db = client["bearing_predictive_maintenance"]
 
+devices_col = db["devices"]
+current_rms_col = db["current_rms"]
+current_samples_col = db["current_samples"]
+current_metadata_col = db["current_metadata"]
+vibration_rms_col = db["vibration_rms"]
+vibration_samples_col = db["vibration_samples"]
+vibration_metadata_col = db["vibration_metadata"]
 
 app = FastAPI()
 
-# 미들웨어 설정 (프론트에서 백엔드로 접근할 수 있도록 허용하는 설정)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # 모든 도메인에서의 접근을 허용 (학습/개발 단계용)
-    allow_credentials=True,
-    allow_methods=["*"],  # GET, POST, PUT, DELETE 등 모든 HTTP 메서드 허용
-    allow_headers=["*"],  # 모든 HTTP 헤더 허용
-)
+# === 데이터 모델 정의 ===
+class MotorSpec(BaseModel):
+    model: str
+    rpm: int
+    power_kw: float
+    pole: float
 
+class Device(BaseModel):
+    _id: Optional[str]
+    motor_spec: MotorSpec
+    alias: str = "0"
 
-MONGO_URL = "mongodb://localhost:27017"
-client = AsyncIOMotorClient(MONGO_URL)
-db = client["bearing_predictive_maintenance"]
+class RMS(BaseModel):
+    _id: Optional[str]
+    device_ref: str
+    values: List[float]
 
-# 기본 엔드포인트
-@app.get("/")
-async def read_root():
-    return {"message": "Hello World"}
+class Samples(BaseModel):
+    _id: Optional[str]
+    device_ref: str
+    samples: List[List[float]]
 
-# 저장된 센서 데이터 리스트 조회
-@app.get("/sensor-data")
-async def get_sensor_data():
-    # 프론트엔드 차트나 테이블에서 사용할 샘플 데이터
-    sample_data = [
-        {"id": 1, "timestamp": "2024-03-20 10:00:01", "vibration": 0.52, "temperature": 35.4, "current": 1.2},
-        {"id": 2, "timestamp": "2024-03-20 10:00:02", "vibration": 0.55, "temperature": 35.6, "current": 1.3},
-    ]
-    return {"status": "success", "data": sample_data}
+class Metadata(BaseModel):
+    _id: Optional[str]
+    device_ref: str
+    date: str
+    filename: str
+    data_label: Optional[str] = None
+    label_no: Optional[str] = None
+    period: str
+    sample_rate: int
+    data_length: int
+    rms_id: str
+    samples_id: str
 
-# 과거 예측 이력 리스트 조회
-@app.get("/prediction-history")
-async def get_prediction_history():
-    # 과거 진단 기록 페이지에서 사용할 샘플 데이터
-    history_data = [
-        {"id": 1, "date": "2024-03-19", "result": "정상", "confidence": 0.98},
-        {"id": 2, "date": "2024-03-18", "result": "베어링불량", "confidence": 0.85},
-    ]
-    return {"status": "success", "data": history_data}
+class UploadData(BaseModel):
+    Date: str
+    Filename: str
+    DataLabel: Optional[str] = None
+    LabelNo: Optional[str] = None
+    MotorSpec: str
+    Period: str
+    SampleRate: int
+    RMS: List[float]
+    DataLength: int
+    Samples: List[List[float]]
 
-# 실시간 예측 리스트 조회
-@app.get("/real-time-prediction")
-async def get_real_time_prediction():
-    # 대시보드 메인에서 보여줄 현재 상태 데이터
-    real_time_status = {
-        "motor_id": "MTR_001",
-        "current_status": "정상",
-        "last_update": "2024-03-20 15:30:45",
-        "risk_level": "Low"
+# === 유틸 ===
+def parse_motor_spec(spec_str: str) -> Dict[str, Any]:
+    parts = [p for p in spec_str.split(",") if p]
+    return {
+        "model": parts[0],
+        "rpm": int(parts[1]),
+        "power_kw": float(parts[2]),
+        "pole": float(parts[3])
     }
-    return {"status": "success", "data": real_time_status}
 
-@app.post("/history")
-async def create_history(data: dict = Body(...)):
-    result = await db.history.insert_one(data)
-    return {"message": "History created", "id": str(result.inserted_id)}
-
-@app.get("/history")
-async def get_history(id: str = None, model_name: str = None):
-    if id:
-        history = await db.history.find_one({"_id": id})
-        return fix_objectid(history) if history else {"message": "History not found"}
-    elif model_name:
-        # motor_spec 안의 model 필드 검색
-        history_list = await db.history.find({"motor_spec.model": model_name}).to_list(100)
-        return [fix_objectid(history) for history in history_list]
+def find_or_create_device(spec: Dict[str, Any]) -> ObjectId:
+    existing = devices_col.find_one({"motor_spec": spec})
+    if existing:
+        return existing["_id"]
     else:
-        history_list = await db.history.find({}).to_list(100)
-        return [fix_objectid(history) for history in history_list]
+        result = devices_col.insert_one({
+            "motor_spec": spec,
+            "alias": "0"
+        })
+        return result.inserted_id
 
+# === 업로드 엔드포인트 (Current) ===
+@app.post("/api/upload/current")
+def upload_current(data: UploadData):
+    spec = parse_motor_spec(data.MotorSpec)
+    device_ref = find_or_create_device(spec)
+
+    rms_result = current_rms_col.insert_one({
+        "device_ref": device_ref,
+        "values": data.RMS
+    })
+    rms_id = rms_result.inserted_id
+
+    samples_result = current_samples_col.insert_one({
+        "device_ref": device_ref,
+        "samples": data.Samples
+    })
+    samples_id = samples_result.inserted_id
+
+    meta_result = current_metadata_col.insert_one({
+        "device_ref": device_ref,
+        "date": data.Date,
+        "filename": data.Filename,
+        "data_label": data.DataLabel,
+        "label_no": data.LabelNo,
+        "period": data.Period,
+        "sample_rate": data.SampleRate,
+        "data_length": data.DataLength,
+        "rms_id": rms_id,
+        "samples_id": samples_id
+    })
+
+    return {"status": "ok", "metadata_id": str(meta_result.inserted_id)}
+
+# === 업로드 엔드포인트 (Vibration) ===
+@app.post("/api/upload/vibration")
+def upload_vibration(data: UploadData):
+    spec = parse_motor_spec(data.MotorSpec)
+    device_ref = find_or_create_device(spec)
+
+    rms_result = vibration_rms_col.insert_one({
+        "device_ref": device_ref,
+        "values": data.RMS
+    })
+    rms_id = rms_result.inserted_id
+
+    samples_result = vibration_samples_col.insert_one({
+        "device_ref": device_ref,
+        "samples": data.Samples
+    })
+    samples_id = samples_result.inserted_id
+
+    meta_result = vibration_metadata_col.insert_one({
+        "device_ref": device_ref,
+        "date": data.Date,
+        "filename": data.Filename,
+        "data_label": data.DataLabel,
+        "label_no": data.LabelNo,
+        "period": data.Period,
+        "sample_rate": data.SampleRate,
+        "data_length": data.DataLength,
+        "rms_id": rms_id,
+        "samples_id": samples_id
+    })
+
+    return {"status": "ok", "metadata_id": str(meta_result.inserted_id)}
+
+# === 조회 엔드포인트 (Devices) ===
+@app.get("/api/devices")
+def get_devices():
+    devices = list(devices_col.find({}, {"motor_spec": 1, "alias": 1}))
+    for d in devices:
+        d["_id"] = str(d["_id"])
+    return devices
+
+# === 조회 엔드포인트 (Current History) ===
+@app.get("/api/devices/{device_id}/current")
+def get_current_history(device_id: str):
+    history = list(current_metadata_col.find({"device_ref": ObjectId(device_id)}))
+    for h in history:
+        h["_id"] = str(h["_id"])
+        h["device_ref"] = str(h["device_ref"])
+        h["rms_id"] = str(h["rms_id"])
+        h["samples_id"] = str(h["samples_id"])
+    return history
+
+# RMS 조회
+@app.get("/api/devices/{device_id}/current/rms")
+def get_current_rms(device_id: str):
+    docs = list(current_metadata_col.find({"device_ref": ObjectId(device_id)}))
+    rms_values = [doc.get("rms") for doc in docs if "rms" in doc]
+    return {"device_id": device_id, "rms": rms_values}
+
+# Samples 조회
+@app.get("/api/devices/{device_id}/current/samples")
+def get_current_samples(device_id: str):
+    docs = list(current_metadata_col.find({"device_ref": ObjectId(device_id)}))
+    samples = [doc.get("samples") for doc in docs if "samples" in doc]
+    return {"device_id": device_id, "samples": samples}
+
+# === 조회 엔드포인트 (Vibration History) ===
+@app.get("/api/devices/{device_id}/vibration")
+def get_vibration_history(device_id: str):
+    history = list(vibration_metadata_col.find({"device_ref": ObjectId(device_id)}))
+    for h in history:
+        h["_id"] = str(h["_id"])
+        h["device_ref"] = str(h["device_ref"])
+        h["rms_id"] = str(h["rms_id"])
+        h["samples_id"] = str(h["samples_id"])
+    return history
+
+# RMS 조회
+@app.get("/api/devices/{device_id}/vibration/rms")
+def get_vibration_rms(device_id: str):
+    docs = list(vibration_metadata_col.find({"device_ref": ObjectId(device_id)}))
+    rms_values = [doc.get("rms") for doc in docs if "rms" in doc]
+    return {"device_id": device_id, "rms": rms_values}
+
+# Samples 조회
+@app.get("/api/devices/{device_id}/vibration/samples")
+def get_vibration_samples(device_id: str):
+    docs = list(vibration_metadata_col.find({"device_ref": ObjectId(device_id)}))
+    samples = [doc.get("samples") for doc in docs if "samples" in doc]
+    return {"device_id": device_id, "samples": samples}
+
+# === 실행 엔트리포인트 ===
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
-    # pip install fastapi uvicorn motor
-    # uvicorn main:app --reload
-    # 으로 서버 실행
+# pip install fastapi uvicorn pymongo
+# uvicorn main:app --reload --host 0.0.0.0 --port 8000
