@@ -15,7 +15,29 @@ const initialNodes = Array.from({ length: 9 }, (_, i) => ({
 export default function RealTimeMonitoring() {
   const [nodes, setNodes] = useState(initialNodes);
 
-  // 실시간 시뮬레이션 로직 (1초마다 업데이트)
+  // 모달 제어 및 입력 폼 상태 관리
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deviceForm, setDeviceForm] = useState({
+    device_id: "",
+    ip_address: "",
+    port: "",
+  });
+
+  // 위험 감지 모달(알림) 상태 관리
+  const [alerts, setAlerts] = useState([]);
+
+  // 알림을 발생시키는 함수 (이름과 확률을 따로 받아 줄바꿈 처리)
+  const triggerAlert = (name, prob) => {
+    const newAlert = { id: Date.now(), name, prob };
+    setAlerts((prev) => [...prev, newAlert]);
+  };
+
+  // 사용자가 알림 모달의 '확인' 또는 'X' 버튼을 눌렀을 때 처리
+  const handleCloseAlerts = () => {
+    setAlerts([]); // 모든 알림 지우기
+  };
+
+  // 실시간 시뮬레이션 및 웹소켓 뼈대 로직
   useEffect(() => {
     const interval = setInterval(() => {
       setNodes((prevNodes) =>
@@ -30,8 +52,13 @@ export default function RealTimeMonitoring() {
           const isTarget = node.id === "MTR-105";
           const finalV = isTarget ? randV + 0.05 : randV;
 
-          // 고장 확률 로직 (진동 수치만으로 계산하도록 단순화)
+          // 고장 확률 로직
           const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
+
+          // 이전 확률은 80% 미만이었는데, 방금 80% 이상으로 뛰었다면 모달 알림 발생
+          if (finalProb >= 80 && node.prob < 80) {
+            triggerAlert(node.name, finalProb);
+          }
 
           return {
             ...node,
@@ -46,16 +73,59 @@ export default function RealTimeMonitoring() {
     return () => clearInterval(interval);
   }, []);
 
+  // 장비 등록 모달 닫기 및 폼 초기화
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setDeviceForm({ device_id: "", ip_address: "", port: "" });
+  };
+
+  // 폼 입력값 변경 처리
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setDeviceForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // 장비 등록 처리
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!deviceForm.device_id || !deviceForm.ip_address || !deviceForm.port) {
+      alert("모든 정보를 입력해주세요.");
+      return;
+    }
+
+    const newNode = {
+      id: deviceForm.device_id,
+      name: `신규 등록 장비 (${deviceForm.ip_address})`,
+      vibration: 0.01,
+      current: 2.0,
+      prob: 1,
+      history: Array.from({ length: 20 }, () => ({ val: 0.01 })),
+    };
+
+    setNodes((prev) => [...prev, newNode]);
+    alert(
+      "장비가 화면에 임시 등록되었습니다.\n추후 POST /api/devices API 연동이 필요합니다.",
+    );
+    handleCloseModal();
+  };
+
   return (
     <PageContainer>
       <Header>
         <TitleGroup>
-          <Title>실시간 모터 통합 관제 (9분할 화면)</Title>
+          <Title>실시간 모터 통합 관제</Title>
         </TitleGroup>
-        <StatusSummary>
-          시스템 가동률: <Highlight>98.2%</Highlight> | 전체 모터:{" "}
-          <Highlight>9대</Highlight>
-        </StatusSummary>
+
+        <RightControls>
+          <StatusSummary>
+            시스템 가동률: <Highlight>98.2%</Highlight> | 전체 모터:{" "}
+            <Highlight>{nodes.length}대</Highlight>
+          </StatusSummary>
+          {/* 신규 장비 등록 보류 */}
+          {/* <RegisterButton onClick={() => setIsModalOpen(true)}>
+            + 신규 장비 등록
+          </RegisterButton> */}
+        </RightControls>
       </Header>
 
       <GridContainer>
@@ -92,15 +162,14 @@ export default function RealTimeMonitoring() {
               </MainValue>
             </ContentRow>
 
-            {/* 그래프 영역을 넓고 크게 변경 */}
             <LargeChartContainer>
               <ResponsiveContainer width="100%" height={90}>
                 <LineChart data={node.history}>
                   <Line
                     type="monotone"
                     dataKey="val"
-                    stroke={node.prob >= 70 ? "#ef4444" : "#3b82f6"}
-                    strokeWidth={3} /* 선 굵기 증가 */
+                    stroke={node.prob >= 70 ? "var(--error)" : "var(--main)"}
+                    strokeWidth={3}
                     dot={false}
                     isAnimationActive={false}
                   />
@@ -116,7 +185,9 @@ export default function RealTimeMonitoring() {
               </SubItem>
               <SubItem>
                 <Label>고장확률</Label>
-                <SubValue style={{ color: "var(--main)", fontWeight: "bold" }}>
+                <SubValue
+                  style={{ color: "var(--main)", fontWeight: "var(--bold)" }}
+                >
                   {node.prob}%
                 </SubValue>
               </SubItem>
@@ -135,12 +206,97 @@ export default function RealTimeMonitoring() {
             <ProgressBarBg>
               <ProgressBarFill
                 $width={node.prob}
-                $color={node.prob >= 70 ? "#ef4444" : "#3b82f6"}
+                $color={node.prob >= 70 ? "var(--error)" : "var(--main)"}
               />
             </ProgressBarBg>
           </NodeCard>
         ))}
       </GridContainer>
+
+      {/* 장비 등록 모달 창 */}
+      {isModalOpen && (
+        <ModalOverlay onClick={handleCloseModal}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <ModalTitle>신규 장비 등록</ModalTitle>
+              <CloseIcon onClick={handleCloseModal}>✕</CloseIcon>
+            </ModalHeader>
+            <form onSubmit={handleSubmit}>
+              <FormGroup>
+                <FormLabel>장비 식별자 (Device ID)</FormLabel>
+                <FormInput
+                  type="text"
+                  name="device_id"
+                  placeholder="예: MTR-201"
+                  value={deviceForm.device_id}
+                  onChange={handleInputChange}
+                  required
+                />
+              </FormGroup>
+              <FormGroup>
+                <FormLabel>IP 주소 (IP Address)</FormLabel>
+                <FormInput
+                  type="text"
+                  name="ip_address"
+                  placeholder="예: 192.168.0.15"
+                  value={deviceForm.ip_address}
+                  onChange={handleInputChange}
+                  required
+                />
+              </FormGroup>
+              <FormGroup>
+                <FormLabel>포트 번호 (Port)</FormLabel>
+                <FormInput
+                  type="number"
+                  name="port"
+                  placeholder="예: 8080"
+                  value={deviceForm.port}
+                  onChange={handleInputChange}
+                  required
+                />
+              </FormGroup>
+              <ModalFooter>
+                <CancelButton type="button" onClick={handleCloseModal}>
+                  취소
+                </CancelButton>
+                <SubmitButton type="submit">등록 완료</SubmitButton>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* 위험 감지 알림 모달 창 */}
+      {alerts.length > 0 && (
+        <AlertModalOverlay>
+          <AlertModalContent>
+            <AlertHeader>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "10px" }}
+              >
+                <WarningIcon>⚠️</WarningIcon>
+                <AlertTitle>시스템 위험 감지</AlertTitle>
+              </div>
+              <CloseIcon onClick={handleCloseAlerts}>✕</CloseIcon>
+            </AlertHeader>
+            <AlertList>
+              {alerts.map((alert) => (
+                <AlertItem key={alert.id}>
+                  <div style={{ textAlign: "center", lineHeight: "1.6" }}>
+                    <div>[위험]</div>
+                    <div>
+                      {alert.name}의 고장 확률 {alert.prob}%
+                    </div>
+                  </div>
+                </AlertItem>
+              ))}
+            </AlertList>
+            <AlertButton onClick={handleCloseAlerts}>
+              내용 확인 완료
+            </AlertButton>
+          </AlertModalContent>
+        </AlertModalOverlay>
+      )}
     </PageContainer>
   );
 }
@@ -157,6 +313,7 @@ const PageContainer = styled.div`
   box-sizing: border-box;
   background-color: var(--background2);
   min-height: calc(100vh - 50px);
+  position: relative;
 `;
 
 const Header = styled.div`
@@ -173,18 +330,17 @@ const TitleGroup = styled.div`
   gap: 12px;
 `;
 
-const LiveDot = styled.div`
-  width: 10px;
-  height: 10px;
-  background-color: #ef4444;
-  border-radius: 50%;
-  animation: ${blink} 1.5s infinite;
-`;
-
 const Title = styled.h2`
   font-size: var(--fontTitle);
   color: var(--font);
   font-weight: 800;
+  margin: 0;
+`;
+
+const RightControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 20px;
 `;
 
 const StatusSummary = styled.div`
@@ -197,6 +353,22 @@ const Highlight = styled.span`
   font-weight: 700;
 `;
 
+const RegisterButton = styled.button`
+  background-color: var(--main);
+  color: var(--font3);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: var(--fontSm);
+  font-weight: var(--bold);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #1e2a82;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+`;
+
 const GridContainer = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -207,86 +379,84 @@ const NodeCard = styled.div`
   background: white;
   border-radius: 12px;
   padding: 16px;
-  border: 1px solid ${(props) => (props.$isDanger ? "#fecaca" : "#e2e8f0")};
+  border: 1px solid
+    ${(props) => (props.$isDanger ? "#fecaca" : "var(--border)")};
   box-shadow: var(--shadow);
   transition: transform 0.2s;
   &:hover {
     transform: translateY(-4px);
   }
-  background-color: ${(props) => (props.$isDanger ? "#fffafb" : "white")};
 `;
 
 const NodeHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px; /* 간격 소폭 조정 */
+  margin-bottom: 12px;
 `;
 
 const NodeInfo = styled.div``;
 
 const NodeID = styled.div`
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
+  font-size: var(--fontXs);
+  color: var(--font2);
+  font-weight: var(--bold);
 `;
 
 const NodeName = styled.div`
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: var(--fontMd);
+  font-weight: var(--bold);
+  color: var(--font);
 `;
 
 const Badge = styled.div`
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--fontXxs);
+  font-weight: var(--bold);
   padding: 4px 8px;
-  border-radius: 6px;
-  background: ${(props) =>
+  border-radius: 20px;
+  background-color: ${(props) =>
     props.$type === "danger"
-      ? "#fee2e2"
+      ? "var(--bgError)"
       : props.$type === "warning"
-        ? "#fef3c7"
-        : "#d1fae5"};
+        ? "var(--bgWarning)"
+        : "var(--bgRun)"};
   color: ${(props) =>
     props.$type === "danger"
-      ? "#ef4444"
+      ? "var(--error)"
       : props.$type === "warning"
-        ? "#d97706"
-        : "#059669"};
+        ? "var(--waiting)"
+        : "var(--run)"};
 `;
-
 const ContentRow = styled.div`
   display: flex;
-  flex-direction: column; /* 세로 정렬로 변경 */
+  flex-direction: column;
   margin-bottom: 10px;
 `;
 
 const MainValue = styled.div``;
 
 const Label = styled.div`
-  font-size: 12px;
-  color: #94a3b8;
-  font-weight: 600;
+  font-size: var(--fontXs);
+  color: var(--font2);
+  font-weight: var(--bold);
   margin-bottom: 4px;
 `;
 
 const Value = styled.div`
   font-size: 24px;
-  font-weight: 800;
-  color: ${(props) => (props.$isDanger ? "#ef4444" : "#1e293b")};
+  font-weight: var(--bold);
+  color: ${(props) => (props.$isDanger ? "var(--error)" : "var(--font)")};
 `;
 
 const Unit = styled.span`
-  font-size: 12px;
-  color: #94a3b8;
+  font-size: var(--fontXs);
+  color: var(--font2);
 `;
 
-/* 크기가 커진 차트 컨테이너 */
 const LargeChartContainer = styled.div`
   width: 100%;
   margin-bottom: 16px;
-  background-color: #f8fafc; /* 차트 배경색을 살짝 넣어 구분을 줌 */
+  background-color: var(--background2);
   border-radius: 8px;
   padding: 8px 0;
 `;
@@ -295,21 +465,21 @@ const SubDataGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--border);
   margin-bottom: 12px;
 `;
 
 const SubItem = styled.div``;
 
 const SubValue = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  color: #334155;
+  font-size: var(--fontSm);
+  font-weight: var(--bold);
+  color: var(--font);
 `;
 
 const ProgressBarBg = styled.div`
   height: 6px;
-  background: #f1f5f9;
+  background: var(--border);
   border-radius: 10px;
   overflow: hidden;
 `;
@@ -319,4 +489,204 @@ const ProgressBarFill = styled.div`
   width: ${(props) => props.$width}%;
   background-color: ${(props) => props.$color};
   transition: width 0.5s ease-in-out;
+`;
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled.div`
+  background-color: var(--background);
+  width: 400px;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0;
+  font-size: var(--fontHd);
+  color: var(--font);
+  font-weight: var(--bold);
+`;
+
+const CloseIcon = styled.button`
+  font-size: 20px;
+  color: var(--font2);
+  transition: color 0.2s;
+
+  &:hover {
+    color: var(--error);
+  }
+`;
+
+const FormGroup = styled.div`
+  margin-bottom: 16px;
+`;
+
+const FormLabel = styled.label`
+  display: block;
+  font-size: var(--fontXs);
+  color: var(--font2);
+  font-weight: var(--bold);
+  margin-bottom: 8px;
+`;
+
+const FormInput = styled.input`
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: var(--fontSm);
+  background-color: var(--background);
+  color: var(--font);
+  box-sizing: border-box;
+
+  &:focus {
+    border-color: var(--main);
+    box-shadow: 0 0 0 3px rgba(44, 59, 161, 0.1);
+  }
+`;
+
+const ModalFooter = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+`;
+
+const CancelButton = styled.button`
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  background-color: var(--background);
+  color: var(--font);
+  border-radius: 6px;
+  font-weight: var(--bold);
+  font-size: var(--fontSm);
+
+  &:hover {
+    background-color: var(--background2);
+  }
+`;
+
+const SubmitButton = styled.button`
+  padding: 10px 16px;
+  background-color: var(--main);
+  color: var(--font3);
+  border: none;
+  border-radius: 6px;
+  font-weight: var(--bold);
+  font-size: var(--fontSm);
+
+  &:hover {
+    background-color: #1e2a82;
+  }
+`;
+
+const AlertModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+`;
+
+const AlertModalContent = styled.div`
+  background-color: var(--background);
+  width: 400px;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  border: 2px solid var(--border);
+`;
+
+const AlertHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const WarningIcon = styled.span`
+  font-size: 24px;
+  animation: ${blink} 1s linear infinite;
+`;
+
+const AlertTitle = styled.h3`
+  margin: 0;
+  margin-top: 5px;
+  font-size: var(--fontLg);
+  color: var(--error);
+  font-weight: var(--bold);
+`;
+
+const AlertList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+  max-height: 200px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--error);
+    border-radius: 3px;
+  }
+`;
+
+const AlertItem = styled.div`
+  font-size: var(--fontSm);
+  color: var(--error);
+  font-weight: var(--bold);
+  min-height: 150px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--bgError);
+  padding: 12px 16px;
+  border-radius: 8px;
+`;
+
+const AlertButton = styled.button`
+  width: 100%;
+  padding: 14px;
+  background-color: var(--error);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: var(--fontSm);
+  font-weight: var(--bold);
+  transition: all 0.2s;
+
+  &:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+  }
 `;

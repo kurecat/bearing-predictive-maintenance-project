@@ -16,11 +16,11 @@ const Navbar = () => {
         <MenuItem to="/" $isActive={path === "/"}>
           대시보드
         </MenuItem>
+        <MenuItem to="/history" $isActive={path === "/history"}>
+          데이터 예측
+        </MenuItem>
         <MenuItem to="/real-time" $isActive={path === "/real-time"}>
           실시간 모니터링
-        </MenuItem>
-        <MenuItem to="/report" $isActive={path === "/report"}>
-          분석 리포트
         </MenuItem>
       </MenuList>
 

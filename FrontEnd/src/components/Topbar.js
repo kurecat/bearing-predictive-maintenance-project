@@ -10,7 +10,7 @@ export default function Topbar({ toggleSidebar }) {
   const [tabs, setTabs] = useState([]);
 
   const getTabLabel = (path) => {
-    if (path.includes("/report")) return "분석 리포트";
+    if (path.includes("/history")) return "데이터 예측";
     if (path.includes("/real-time")) return "실시간 모니터링";
     return "대시보드";
   };
