@@ -1,24 +1,31 @@
 import React, { useState, useEffect, useRef, useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
-import { NotificationContext } from "../components/Layout";
+import { NotificationContext } from "./Layout";
 
 export default function Topbar({ toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 컨텍스트에서 알림 데이터와 읽음 처리 함수 가져오기
   const { notifications, markAsRead } = useContext(NotificationContext);
 
-  const [tabs, setTabs] = useState([]);
+  const [tabs, setTabs] = useState([
+    {
+      path: "/",
+      label: "대시보드",
+      isFixed: true,
+    },
+  ]);
+
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const alertRef = useRef(null);
 
-  // 읽지 않은 알림 개수 계산
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = notifications
+    ? notifications.filter((n) => !n.isRead).length
+    : 0;
 
   const getTabLabel = (path) => {
-    if (path.includes("/history")) return "데이터 예측";
+    if (path.includes("/history")) return "데이터 예측 및 이력";
     if (path.includes("/real-time")) return "실시간 모니터링";
     return "대시보드";
   };
@@ -50,32 +57,41 @@ export default function Topbar({ toggleSidebar }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // 알림창 토글 시 읽음 처리 수행
   const handleToggleAlert = () => {
-    if (!isAlertOpen) markAsRead(); // 열릴 때 모두 읽음 처리
+    if (!isAlertOpen && markAsRead) {
+      markAsRead();
+    }
     setIsAlertOpen(!isAlertOpen);
   };
 
-  const isCurrentFavorite =
-    tabs.find((t) => t.path === location.pathname)?.isFavorite || false;
+  const currentTab = tabs.find((t) => t.path === location.pathname);
+  const isCurrentFavorite = currentTab?.isFavorite || false;
+  const isDashboard = location.pathname === "/";
+
   const toggleFavorite = () => {
+    if (isDashboard) return;
+
     setTabs((prevTabs) => {
       const updatedTabs = prevTabs.map((tab) =>
         tab.path === location.pathname
           ? { ...tab, isFavorite: !tab.isFavorite }
           : tab,
       );
-      return updatedTabs.sort(
-        (a, b) => (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0),
-      );
+      return updatedTabs.sort((a, b) => {
+        if (a.isFixed) return -1;
+        if (b.isFixed) return 1;
+        return (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0);
+      });
     });
   };
 
   const handleTabClick = (path) => navigate(path);
+
   const handleCloseTab = (e, pathToClose) => {
     e.stopPropagation();
     const targetTab = tabs.find((t) => t.path === pathToClose);
-    if (targetTab?.isFavorite) return;
+    if (targetTab?.isFixed || targetTab?.isFavorite) return;
+
     const newTabs = tabs.filter((tab) => tab.path !== pathToClose);
     setTabs(newTabs);
     if (location.pathname === pathToClose) {
@@ -100,32 +116,52 @@ export default function Topbar({ toggleSidebar }) {
             <line x1="9" y1="3" x2="9" y2="21"></line>
           </svg>
         </IconButton>
-        <IconButton onClick={toggleFavorite} title="현재 탭 고정/해제">
+
+        <IconButton
+          onClick={isDashboard ? undefined : toggleFavorite}
+          title={isDashboard ? "기본 페이지 (고정됨)" : "현재 탭 고정"}
+          $isDashboard={isDashboard}
+        >
           <svg
             width="20"
             height="20"
             viewBox="0 0 24 24"
-            fill={isCurrentFavorite ? "#facc15" : "none"}
-            stroke={isCurrentFavorite ? "#facc15" : "currentColor"}
+            fill={!isDashboard && isCurrentFavorite ? "#facc15" : "none"}
+            stroke={
+              !isDashboard && isCurrentFavorite ? "#facc15" : "currentColor"
+            }
             strokeWidth="2"
           >
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
           </svg>
         </IconButton>
+
         <TabContainer>
           {tabs.map((tab) => (
             <TabItem
               key={tab.path}
               $isActive={location.pathname === tab.path}
+              $isFixed={tab.isFixed}
               onClick={() => handleTabClick(tab.path)}
             >
-              {tab.isFavorite && <TabStar>★</TabStar>}
+              {tab.isFixed && (
+                <FixedIcon className="fixed-icon">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z" />
+                  </svg>
+                </FixedIcon>
+              )}
+              {tab.isFavorite && !tab.isFixed && <TabStar>★</TabStar>}
               {tab.label}
-              {!tab.isFavorite && (
+              {!tab.isFixed && !tab.isFavorite && (
                 <CloseButton
                   className="close-btn"
                   onClick={(e) => handleCloseTab(e, tab.path)}
-                  title="탭 닫기"
                 >
                   <svg
                     width="12"
@@ -159,10 +195,8 @@ export default function Topbar({ toggleSidebar }) {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
-            {/* 읽지 않은 알림이 있을 때만 빨간 배지 표시 */}
             {unreadCount > 0 && <BadgeCount>{unreadCount}</BadgeCount>}
           </IconButton>
-
           {isAlertOpen && (
             <Dropdown>
               <DropdownHeader>
@@ -213,14 +247,14 @@ const IconButton = styled.button`
   justify-content: center;
   background: none;
   border: none;
-  cursor: pointer;
-  color: var(--font2);
+  cursor: ${(props) => (props.$isDashboard ? "default" : "pointer")};
+  color: ${(props) => (props.$isDashboard ? "var(--border)" : "var(--font2)")};
   padding: 8px;
   border-radius: 8px;
   transition: all 0.2s ease;
   &:hover {
-    background-color: var(--background2);
-    color: var(--font);
+    background-color: ${(props) =>
+      props.$isDashboard ? "transparent" : "var(--background2)"};
   }
 `;
 const TabContainer = styled.div`
@@ -233,48 +267,54 @@ const TabContainer = styled.div`
     display: none;
   }
 `;
+
+// [수정] FixedIcon 스타일: 평소에는 너비와 투명도를 0으로 설정
+const FixedIcon = styled.span`
+  display: flex;
+  align-items: center;
+  color: var(--font2);
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: all 0.2s ease-in-out;
+`;
+
 const TabItem = styled.div`
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: 6px;
   font-size: var(--fontMd);
   font-weight: ${(props) =>
     props.$isActive ? "var(--bold)" : "var(--medium)"};
   color: ${(props) => (props.$isActive ? "var(--main)" : "var(--font2)")};
   background-color: ${(props) => (props.$isActive ? "#eff6ff" : "transparent")};
+
   cursor: pointer;
   white-space: nowrap;
+
   &:hover {
+    .fixed-icon {
+      opacity: 0.6;
+      width: 14px; // 아이콘 크기 + 간격만큼 확장
+      margin-right: 4px;
+    }
     .close-btn {
       opacity: 1;
-      pointer-events: auto;
     }
   }
 `;
+
 const TabStar = styled.span`
-  margin-right: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
   color: #facc15;
+  margin-right: 6px;
 `;
 const CloseButton = styled.span`
-  margin-left: 6px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  color: var(--font2);
+  margin-left: 6px;
   opacity: 0;
-  pointer-events: none;
-  transition: all 0.2s ease;
   &:hover {
-    background-color: var(--border);
     color: var(--error);
   }
 `;
@@ -324,15 +364,10 @@ const DropdownBody = styled.div`
 const NotificationItem = styled.div`
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-  &:last-child {
-    border-bottom: none;
-  }
   p {
     margin: 0;
     font-size: 12px;
     color: var(--font);
-    font-weight: 500;
-    line-height: 1.4;
   }
   span {
     font-size: 10px;
