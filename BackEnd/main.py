@@ -48,8 +48,8 @@ class Metadata(BaseModel):
     device_ref: str
     date: str
     filename: str
-    data_label: Optional[str] = None
-    label_no: Optional[str] = None
+    data_label: Optional[str]
+    label_no: Optional[str]
     period: str
     sample_rate: int
     data_length: int
@@ -59,8 +59,8 @@ class Metadata(BaseModel):
 class UploadData(BaseModel):
     Date: str
     Filename: str
-    DataLabel: Optional[str] = None
-    LabelNo: Optional[str] = None
+    DataLabel: Optional[str]
+    LabelNo: Optional[str]
     MotorSpec: str
     Period: str
     SampleRate: int
