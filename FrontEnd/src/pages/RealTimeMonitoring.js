@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useContext } from "react";
 import styled, { keyframes } from "styled-components";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { NotificationContext } from "../components/Layout";
 
 const initialNodes = Array.from({ length: 9 }, (_, i) => ({
   id: `MTR-${101 + i}`,
-  name: `라인-${String.fromCharCode(65 + Math.floor(i / 3))} 모터 ${(i % 3) + 1}`,
+  name: `${i + 1}호기`,
   vibration: 0.02,
-  current: 2.1,
   prob: 5,
-  history: Array.from({ length: 20 }, () => ({ vib: 0.02, cur: 2.1 })),
 }));
 
 export default function RealTimeMonitoring() {
@@ -17,17 +14,17 @@ export default function RealTimeMonitoring() {
   const { addNotification, addSensorRecord } = useContext(NotificationContext);
   const [alerts, setAlerts] = useState([]);
 
-  const triggerAlert = (name, prob) => {
+  const triggerAlert = (name, prob, status) => {
     const now = new Date();
     const time = now.toLocaleTimeString();
     const date = now.toISOString().split("T")[0];
-    const newAlert = { id: Date.now(), name, prob, time, date };
+    const newAlert = { id: Date.now(), name, prob, time, date, status };
     setAlerts((prev) => [...prev, newAlert]);
 
     if (addNotification) {
       addNotification({
         id: newAlert.id,
-        message: `[위험] ${name} 고장 확률 ${prob}%`,
+        message: `[${status === "danger" ? "점검" : "주의"}] ${name} 고장 확률 ${prob}%`,
         time: time,
       });
     }
@@ -46,22 +43,24 @@ export default function RealTimeMonitoring() {
           const isTarget = node.id === "MTR-105";
           const finalV = isTarget ? randV + 0.05 : randV;
           const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
-          const finalC = parseFloat(
-            (2.1 + (Math.random() - 0.5) * 0.2).toFixed(2),
-          );
 
           const now = new Date();
           const dateString = now.toISOString().split("T")[0];
           const timeString = now.toLocaleTimeString();
 
-          if (finalProb >= 80 && node.prob < 80)
-            triggerAlert(node.name, finalProb);
+          // 1. 30%를 돌파했을 때 (주의 알림)
+          if (finalProb >= 30 && finalProb < 70 && node.prob < 30) {
+            triggerAlert(node.name, finalProb, "warning");
+          }
+          // 2. 70%를 돌파했을 때 (점검 알림)
+          else if (finalProb >= 70 && node.prob < 70) {
+            triggerAlert(node.name, finalProb, "danger");
+          }
 
           if (addSensorRecord) {
             addSensorRecord({
               id: node.id,
               vibration: parseFloat(finalV.toFixed(3)),
-              current: finalC,
               prob: finalProb,
               label: finalProb >= 80 ? 1 : 0,
               date: dateString,
@@ -72,9 +71,7 @@ export default function RealTimeMonitoring() {
           return {
             ...node,
             vibration: parseFloat(finalV.toFixed(3)),
-            current: finalC,
             prob: finalProb,
-            history: [...node.history.slice(1), { vib: finalV, cur: finalC }],
           };
         }),
       );
@@ -86,103 +83,64 @@ export default function RealTimeMonitoring() {
     <PageContainer>
       <Header>
         <TitleGroup>
-          <Title>실시간 모터 통합 관제</Title>
+          <Title>실시간 설비 모니터링</Title>
         </TitleGroup>
         <RightControls>
           <StatusSummary>
-            전체 모터: <Highlight>{nodes.length}대</Highlight>
+            전체 가동 설비: <Highlight>{nodes.length}대</Highlight>
           </StatusSummary>
         </RightControls>
       </Header>
 
       <GridContainer>
         {nodes.map((node) => {
-          const isVibDanger = node.vibration >= 0.1;
-          const isCurDanger = Math.abs(node.current - 2.1) >= 0.5;
+          const isDanger = node.prob >= 70;
+          const isWarning = node.prob >= 30 && node.prob < 70;
+
+          const healthScore = 100 - node.prob;
+          const activeSegments = Math.floor(healthScore / 5);
+
+          const vibWidth = Math.min((node.vibration / 0.15) * 100, 100);
 
           return (
-            <NodeCard key={node.id} $isDanger={node.prob >= 70}>
-              <NodeHeader>
-                <NodeInfo>
-                  <NodeID>{node.id}</NodeID>
-                  <NodeName>{node.name}</NodeName>
-                </NodeInfo>
-                <Badge
-                  $type={
-                    node.prob >= 70
-                      ? "danger"
-                      : node.prob >= 40
-                        ? "warning"
-                        : "success"
+            <Card key={node.id}>
+              <CardLeft>
+                <MachineName>{node.name}</MachineName>
+                <BigNumber>
+                  {node.prob.toFixed(1)}
+                  <UnitSpan>%</UnitSpan>
+                </BigNumber>
+                <StatusBadge
+                  $status={
+                    isDanger ? "danger" : isWarning ? "warning" : "normal"
                   }
                 >
-                  {node.prob >= 70 ? "위험" : node.prob >= 40 ? "경고" : "정상"}
-                </Badge>
-              </NodeHeader>
+                  {isDanger ? "점검" : isWarning ? "주의" : "가동"}
+                </StatusBadge>
+              </CardLeft>
 
-              <ContentRow>
-                <MainValue>
-                  <Label>진동 수치</Label>
-                  <Value $isDanger={isVibDanger}>
-                    {node.vibration} <Unit>mm/s</Unit>
-                  </Value>
-                </MainValue>
-                <MainValue>
-                  <Label>전류량</Label>
-                  <Value $isDanger={isCurDanger}>
-                    {node.current} <Unit>A</Unit>
-                  </Value>
-                </MainValue>
-              </ContentRow>
-
-              <LargeChartContainer>
-                <ResponsiveContainer width="100%" height={90}>
-                  <LineChart data={node.history}>
-                    <Line
-                      type="monotone"
-                      dataKey="vib"
-                      stroke={isVibDanger ? "var(--error)" : "var(--main)"}
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={false}
+              <CardRight>
+                <SegmentedBar>
+                  {Array.from({ length: 20 }).map((_, i) => (
+                    <Segment
+                      key={i}
+                      $active={i < activeSegments}
+                      $status={
+                        isDanger ? "danger" : isWarning ? "warning" : "normal"
+                      }
                     />
-                    <Line
-                      type="monotone"
-                      dataKey="cur"
-                      stroke={isCurDanger ? "var(--error)" : "var(--waiting)"}
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                    <YAxis hide domain={["auto", "auto"]} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </LargeChartContainer>
+                  ))}
+                </SegmentedBar>
 
-              <SubDataGrid>
-                <SubItem>
-                  <Label>고장확률</Label>
-                  <SubValue>{node.prob}%</SubValue>
-                </SubItem>
-                <SubItem>
-                  <Label>현재 상태</Label>
-                  <SubValue
-                    style={{
-                      color: node.prob >= 70 ? "var(--error)" : "var(--font2)",
-                    }}
-                  >
-                    {node.prob >= 70 ? "점검 요망" : "이상 없음"}
-                  </SubValue>
-                </SubItem>
-              </SubDataGrid>
+                <StatsGrid>
+                  <StatLabel>장비ID</StatLabel>
+                  <StatValue>{node.id}</StatValue>
 
-              <ProgressBarBg>
-                <ProgressBarFill
-                  $width={node.prob}
-                  $color={node.prob >= 70 ? "var(--error)" : "var(--main)"}
-                />
-              </ProgressBarBg>
-            </NodeCard>
+                  <StatLabel>수치</StatLabel>
+                  <StatValue>{node.vibration}</StatValue>
+                </StatsGrid>
+              </CardRight>
+            </Card>
           );
         })}
       </GridContainer>
@@ -191,23 +149,29 @@ export default function RealTimeMonitoring() {
         <AlertModalOverlay>
           <AlertModalContent>
             <AlertHeader>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "10px" }}
-              >
+              <TextBox>
                 <WarningIcon>⚠️</WarningIcon>
-                <AlertTitle>시스템 위험 감지</AlertTitle>
-              </div>
+                <AlertTitle>시스템 상태 알림</AlertTitle>
+              </TextBox>
               <CloseIcon onClick={handleCloseAlerts}>✕</CloseIcon>
             </AlertHeader>
             <AlertList>
               {alerts.map((alert) => (
                 <AlertItem key={alert.id}>
-                  <div style={{ textAlign: "center", lineHeight: "1.6" }}>
-                    <div>[위험]</div>
-                    <div>
-                      {alert.name}의 고장 확률 {alert.prob}%
-                    </div>
-                  </div>
+                  <Msg>
+                    <Msg3 $status={alert.status}>
+                      [{alert.status === "danger" ? " 🚨점검 " : " 🟠주의 "}]
+                    </Msg3>
+                    <Msg3>
+                      {alert.name}의 고장 확률
+                      <Msg2 $status={alert.status}>
+                        <Probability $status={alert.status}>
+                          {" "}
+                          {alert.prob}%
+                        </Probability>
+                      </Msg2>
+                    </Msg3>
+                  </Msg>
                 </AlertItem>
               ))}
             </AlertList>
@@ -222,187 +186,237 @@ export default function RealTimeMonitoring() {
 }
 
 const blink = keyframes`0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; }`;
+
 const PageContainer = styled.div`
-  width: 100%;
   padding: 30px;
-  box-sizing: border-box;
   background-color: var(--background2);
-  min-height: calc(100vh - 50px);
-  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
 `;
+
 const Header = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 30px;
 `;
+
 const TitleGroup = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
 `;
+
 const Title = styled.h2`
   font-size: var(--fontTitle);
   color: var(--font);
-  font-weight: 800;
-  margin: 0;
+  font-weight: var(--titleBold);
+  margin: 0 0 8px 0;
 `;
+
 const RightControls = styled.div`
   display: flex;
   align-items: center;
   gap: 20px;
 `;
+
+const StatusSummary = styled.div`
+  font-size: 14px;
+  color: var(--font2);
+`;
+
 const Highlight = styled.span`
   color: var(--font);
   font-weight: 700;
 `;
-const StatusSummary = styled.div`
-  font-size: 14px;
-  color: var(--font2);
-  padding-right: 10px;
-`;
+
 const GridContainer = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
+
+  @media (max-width: 1400px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
 `;
-const NodeCard = styled.div`
-  background: white;
-  border-radius: 12px;
+
+const Card = styled.div`
+  background: var(--background);
+  border-radius: 8px;
   padding: 16px;
-  border: 1px solid
-    ${(props) => (props.$isDanger ? "#fecaca" : "var(--border)")};
+  display: flex;
+  gap: 20px;
+  border: 1px solid var(--border);
   box-shadow: var(--shadow);
   transition: transform 0.2s;
   &:hover {
-    transform: translateY(-4px);
+    transform: translateY(-2px);
   }
 `;
-const NodeHeader = styled.div`
+
+const CardLeft = styled.div`
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 12px;
+  min-width: 70px;
 `;
-const NodeInfo = styled.div``;
-const NodeID = styled.div`
-  font-size: var(--fontXs);
-  color: var(--font2);
-  font-weight: var(--bold);
-`;
-const NodeName = styled.div`
-  font-size: var(--fontMd);
-  font-weight: var(--bold);
+
+const MachineName = styled.div`
+  font-size: 14px;
   color: var(--font);
+  font-weight: 700;
+  margin-bottom: 8px;
 `;
-const Badge = styled.div`
-  font-size: var(--fontXxs);
-  font-weight: var(--bold);
-  padding: 4px 8px;
-  border-radius: 20px;
-  background-color: ${(props) =>
-    props.$type === "danger"
-      ? "var(--bgError)"
-      : props.$type === "warning"
-        ? "var(--bgWarning)"
-        : "var(--bgRun)"};
-  color: ${(props) =>
-    props.$type === "danger"
-      ? "var(--error)"
-      : props.$type === "warning"
-        ? "var(--waiting)"
-        : "var(--run)"};
-`;
-const ContentRow = styled.div`
+
+const BigNumber = styled.div`
+  font-size: 26px;
+  color: var(--font);
+  font-weight: 800;
+  margin-bottom: 12px;
   display: flex;
-  gap: 24px;
-  margin-bottom: 10px;
+  align-items: baseline;
 `;
-const MainValue = styled.div``;
-const Label = styled.div`
-  font-size: var(--fontXs);
+
+const UnitSpan = styled.span`
+  font-size: 14px;
   color: var(--font2);
-  font-weight: var(--bold);
-  margin-bottom: 4px;
+  font-weight: 500;
+  margin-left: 2px;
 `;
-const Value = styled.div`
-  font-size: 24px;
-  font-weight: var(--bold);
-  color: ${(props) => (props.$isDanger ? "#ef4444" : "var(--font)")};
+
+const StatusBadge = styled.div`
+  background-color: ${(props) =>
+    props.$status === "danger"
+      ? "var(--error)"
+      : props.$status === "warning"
+        ? "var(--waiting)"
+        : "var(--main)"};
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  padding: 4px 0;
+  border-radius: 20px;
+  width: 60px;
 `;
-const Unit = styled.span`
-  font-size: var(--fontXs);
-  color: var(--font2);
+
+const CardRight = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 `;
-const LargeChartContainer = styled.div`
+
+const SegmentedBar = styled.div`
+  display: flex;
+  gap: 2px;
   width: 100%;
-  margin-bottom: 16px;
-  background-color: var(--background2);
-  border-radius: 8px;
-  padding: 8px 0;
-`;
-const SubDataGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  margin-bottom: 12px;
-`;
-const SubItem = styled.div``;
-const SubValue = styled.div`
-  font-size: var(--fontSm);
-  font-weight: var(--bold);
-  color: var(--font);
-`;
-const ProgressBarBg = styled.div`
   height: 6px;
-  background: var(--border);
-  border-radius: 10px;
-  overflow: hidden;
+  margin-bottom: 16px;
 `;
-const ProgressBarFill = styled.div`
+
+const Segment = styled.div`
+  flex: 1;
+  border-radius: 1px;
+  background-color: ${(props) => {
+    if (!props.$active) return "var(--main2)";
+    if (props.$status === "danger") return "var(--error)";
+    if (props.$status === "warning") return "var(--waiting)";
+    return "var(--main)";
+  }};
+`;
+
+const StatsGrid = styled.div`
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+`;
+
+const StatLabel = styled.div`
+  font-size: 11px;
+  color: var(--font2);
+  font-weight: 500;
+`;
+
+const StatValue = styled.div`
+  font-size: 12px;
+  color: var(--font);
+  font-weight: 700;
+  white-space: nowrap;
+`;
+
+const MiniBarWrapper = styled.div`
+  width: 100%;
+  height: 4px;
+  background-color: var(--background2);
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+`;
+
+const MiniBarFill = styled.div`
   height: 100%;
   width: ${(props) => props.$width}%;
   background-color: ${(props) => props.$color};
   transition: width 0.5s ease-in-out;
 `;
+
 const AlertModalOverlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 2000;
 `;
+
 const AlertModalContent = styled.div`
   background-color: var(--background);
+  position: relative;
   width: 400px;
   border-radius: 12px;
   padding: 24px;
   box-shadow: var(--shadow);
   border: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
 `;
+
+const TextBox = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
 const WarningIcon = styled.span`
   font-size: 24px;
   animation: ${blink} 1s linear infinite;
 `;
+
 const AlertTitle = styled.h3`
   margin: 0;
   margin-top: 5px;
-  font-size: var(--fontLg);
+  font-size: 20px;
   color: var(--error);
-  font-weight: var(--bold);
+  font-weight: 700;
 `;
+
 const AlertHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
 `;
+
 const AlertList = styled.div`
   display: flex;
   flex-direction: column;
@@ -414,31 +428,66 @@ const AlertList = styled.div`
     width: 6px;
   }
   &::-webkit-scrollbar-thumb {
-    background-color: var(--error);
+    background-color: var(--font);
     border-radius: 3px;
   }
 `;
+
 const AlertItem = styled.div`
-  font-size: var(--fontSm);
-  color: var(--error);
-  font-weight: var(--bold);
-  min-height: 150px;
+  font-size: 14px;
+  color: var(--font);
+  font-weight: 700;
+  min-height: 130px;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: var(--bgError);
+  background-color: #f2f2f2;
+  bpx-shadow: var(--shadow);
+  border-radius: 8px
   padding: 12px 16px;
   border-radius: 8px;
 `;
+
+const Msg = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+`;
+
+const Msg2 = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  color: ${(props) =>
+    props.$status === "danger" ? "var(--error)" : "var(--waiting)"};
+`;
+
+const Msg3 = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+`;
+
+const Probability = styled.div`
+  color: ${(props) =>
+    props.$status === "danger" ? "var(--error)" : "var(--waiting)"};
+  font-weight: 800;
+  font-size: 16px;
+`;
+
 const AlertButton = styled.button`
   width: 100%;
   padding: 14px;
-  background-color: var(--error);
+  background-color: var(--main);
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: var(--fontSm);
-  font-weight: var(--bold);
+  font-size: 14px;
+  font-weight: 700;
   transition: all 0.2s;
   cursor: pointer;
   &:hover {
@@ -446,9 +495,10 @@ const AlertButton = styled.button`
     transform: translateY(-2px);
   }
 `;
+
 const CloseIcon = styled.button`
   font-size: 20px;
-  color: var(--font2);
+  color: #64748b;
   background: none;
   border: none;
   cursor: pointer;

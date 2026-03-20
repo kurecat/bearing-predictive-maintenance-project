@@ -29,7 +29,7 @@ const GlobalStyle = createGlobalStyle`
   :root {
     /* 색상 정의 */
     --main : #2C3BA1;
-    --main2 : #AED6F2;
+    --main2 : #c8cce6;
     --background : #FFFFFF;
     --background2 : #f8fafc;
     --border : #E9E9E9;
@@ -56,12 +56,13 @@ const GlobalStyle = createGlobalStyle`
     --fontHd : 18px;  /* 카드 타이틀, 중간 제목 */
     --fontXl : 18px;  /* 카드 타이틀, 중간 제목 */
     --font2xl : 20px;  /* 대제목 */
-    --fontTitle : 25px;  /* 화면 타이틀 */
+    --fontTitle : 20px;  /* 화면 타이틀 */
 
     /* 폰트 굵기 정의 */
     --normal : 400;
     --medium : 500;
     --bold : 600;
+    --titleBold : 700;
   }
   button {
     background: none;

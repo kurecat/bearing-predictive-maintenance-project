@@ -373,11 +373,11 @@ const PageContainer = styled.div`
 const Header = styled.div`
   margin-bottom: 5px;
 `;
-const Title = styled.h1`
-  font-size: 24px;
+const Title = styled.h2`
+  font-size: var(--fontTitle);
   color: var(--font);
-  font-weight: 800;
-  margin: 0;
+  font-weight: var(--titleBold);
+  margin: 0 0 8px 0;
 `;
 const Subtitle = styled.div`
   font-size: 14px;

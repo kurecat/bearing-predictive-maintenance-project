@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import DataHistory from "./pages/DataHistory";
 import RealTimeMonitoring from "./pages/RealTimeMonitoring";
+import PredictiveAnalysis from "./pages/PredictiveAnalysis";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/history" element={<DataHistory />} />
             <Route path="/real-time" element={<RealTimeMonitoring />} />
+            <Route path="/analysis" element={<PredictiveAnalysis />} />
           </Routes>
         </Layout>
       </BrowserRouter>

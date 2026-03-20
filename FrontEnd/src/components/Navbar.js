@@ -22,6 +22,9 @@ const Navbar = () => {
         <MenuItem to="/real-time" $isActive={path === "/real-time"}>
           실시간 모니터링
         </MenuItem>
+        <MenuItem to="/analysis" $isActive={path === "/analysis"}>
+          Analysis
+        </MenuItem>
       </MenuList>
 
       <BottomSection>
