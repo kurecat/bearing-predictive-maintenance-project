@@ -17,6 +17,7 @@ import {
   Cell,
 } from "recharts";
 import { NotificationContext } from "../components/Layout";
+import SocketQueue from '../api/SocketQueue.js';
 
 // 9개 모터 초기 상태
 const initialNodes = Array.from({ length: 9 }, (_, i) => ({
@@ -28,9 +29,11 @@ const initialNodes = Array.from({ length: 9 }, (_, i) => ({
 }));
 
 export default function Dashboard() {
-  const [nodes, setNodes] = useState(initialNodes);
+  // const [nodes, setNodes] = useState(initialNodes);
+  const [nodes, setNodes] = useState([]);
   const { addNotification, addSensorRecord } = useContext(NotificationContext);
   const [alerts, setAlerts] = useState([]);
+  const socketQueue = new SocketQueue('ws://localhost:8000/socket/devices');
 
   // 알림 트리거 함수
   const triggerAlert = (name, prob, status) => {
@@ -52,58 +55,71 @@ export default function Dashboard() {
   const handleCloseAlerts = () => setAlerts([]);
 
   // 1초마다 실시간 데이터 시뮬레이션
+  // useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     setNodes((prevNodes) =>
+  //       prevNodes.map((node) => {
+  //         const randV = Math.max(
+  //           0.01,
+  //           node.vibration + (Math.random() - 0.5) * 0.01,
+  //         );
+  //         const isTarget = node.id === "MTR-105";
+  //         const finalV = isTarget ? randV + 0.05 : randV;
+  //         const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
+
+  //         const finalC = parseFloat(
+  //           (2.1 + (Math.random() - 0.5) * 0.2).toFixed(2),
+  //         );
+
+  //         const now = new Date();
+  //         const dateString = now.toISOString().split("T")[0];
+  //         const timeString = now.toLocaleTimeString();
+
+  //         // 30% 이상일 때 주의 알림
+  //         if (finalProb >= 30 && finalProb < 70 && node.prob < 30) {
+  //           triggerAlert(node.name, finalProb, "warning");
+  //         }
+  //         // 70% 이상일 때 점검 알림
+  //         else if (finalProb >= 70 && node.prob < 70) {
+  //           triggerAlert(node.name, finalProb, "danger");
+  //         }
+
+  //         if (addSensorRecord) {
+  //           addSensorRecord({
+  //             id: node.id,
+  //             vibration: parseFloat(finalV.toFixed(3)),
+  //             current: finalC,
+  //             prob: finalProb,
+  //             label: finalProb >= 80 ? 1 : 0,
+  //             date: dateString,
+  //             time: timeString,
+  //           });
+  //         }
+
+  //         return {
+  //           ...node,
+  //           vibration: parseFloat(finalV.toFixed(3)),
+  //           current: finalC,
+  //           prob: finalProb,
+  //         };
+  //       }),
+  //     );
+  //   }, 1000);
+  //   return () => clearInterval(interval);
+  // }, [addSensorRecord]);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNodes((prevNodes) =>
-        prevNodes.map((node) => {
-          const randV = Math.max(
-            0.01,
-            node.vibration + (Math.random() - 0.5) * 0.01,
-          );
-          const isTarget = node.id === "MTR-105";
-          const finalV = isTarget ? randV + 0.05 : randV;
-          const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
-
-          const finalC = parseFloat(
-            (2.1 + (Math.random() - 0.5) * 0.2).toFixed(2),
-          );
-
-          const now = new Date();
-          const dateString = now.toISOString().split("T")[0];
-          const timeString = now.toLocaleTimeString();
-
-          // 30% 이상일 때 주의 알림
-          if (finalProb >= 30 && finalProb < 70 && node.prob < 30) {
-            triggerAlert(node.name, finalProb, "warning");
-          }
-          // 70% 이상일 때 점검 알림
-          else if (finalProb >= 70 && node.prob < 70) {
-            triggerAlert(node.name, finalProb, "danger");
-          }
-
-          if (addSensorRecord) {
-            addSensorRecord({
-              id: node.id,
-              vibration: parseFloat(finalV.toFixed(3)),
-              current: finalC,
-              prob: finalProb,
-              label: finalProb >= 80 ? 1 : 0,
-              date: dateString,
-              time: timeString,
-            });
-          }
-
-          return {
-            ...node,
-            vibration: parseFloat(finalV.toFixed(3)),
-            current: finalC,
-            prob: finalProb,
-          };
-        }),
-      );
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [addSensorRecord]);
+    socketQueue.connect();
+    socketQueue.onMessage((message) => {
+      console.log("Received message from WebSocket:", message);
+      setNodes((prevNodes) => {
+        const updatedNodes = prevNodes.map((node) =>
+          node.id === message.id ? { ...node, ...message } : node,
+        );
+        return updatedNodes;
+      });
+    });
+  }, []);
 
   // 실시간 데이터를 기반으로 Dashboard 통계 동적 계산
   const normalMotors = nodes.filter((n) => n.prob < 30).length;
