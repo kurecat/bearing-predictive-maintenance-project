@@ -20,7 +20,7 @@ const Navbar = () => {
           데이터 로그
         </MenuItem>
         <MenuItem to="/analysis" $isActive={path === "/analysis"}>
-          Analysis
+          데이터 분석
         </MenuItem>
       </MenuList>
 

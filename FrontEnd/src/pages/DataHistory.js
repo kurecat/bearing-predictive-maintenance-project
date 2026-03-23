@@ -149,8 +149,8 @@ export default function DataHistory() {
   }, [filteredHistory, deviceList]);
 
   const getStatusInfo = (prob) => {
-    if (prob >= 70) return { text: "위험", type: "danger" };
-    if (prob >= 30) return { text: "주의", type: "warning" };
+    if (prob >= 70) return { text: "고장", type: "danger" };
+    if (prob >= 30) return { text: "위험", type: "warning" };
     return { text: "정상", type: "success" };
   };
 
@@ -166,7 +166,7 @@ export default function DataHistory() {
     <PageContainer>
       <Header>
         <div>
-          <Title>데이터 예측 및 점검 이력 관리</Title>
+          <Title>데이터 로그 관리</Title>
           <Subtitle>
             실시간 수집 데이터 분석 및 AI 예측 로그 통합 저장소
           </Subtitle>
@@ -185,13 +185,13 @@ export default function DataHistory() {
           </KpiValue>
         </KpiCard>
         <KpiCard>
-          <KpiLabel>주의 요망 (30% ~ 70%)</KpiLabel>
+          <KpiLabel>위험 감지 (30% ~ 70%)</KpiLabel>
           <KpiValue $color="var(--waiting)">
             {warningCount.toLocaleString()} 건
           </KpiValue>
         </KpiCard>
         <KpiCard $isAlert={dangerCount > 0}>
-          <KpiLabel>위험 감지 (70% 이상)</KpiLabel>
+          <KpiLabel>고장 감지 (70% 이상)</KpiLabel>
           <KpiValue $color="var(--error)">
             {dangerCount.toLocaleString()} 건
           </KpiValue>
@@ -271,7 +271,7 @@ export default function DataHistory() {
                   stroke="var(--waiting)"
                   strokeDasharray="4 4"
                   label={{
-                    value: "주의 요망 (0.10)",
+                    value: "위험 임계점 (0.10)",
                     fill: "var(--waiting)",
                     fontSize: 10,
                     position: "insideTopLeft",
@@ -283,7 +283,7 @@ export default function DataHistory() {
                   stroke="var(--error)"
                   strokeDasharray="4 4"
                   label={{
-                    value: "위험 임계점 (0.20)",
+                    value: "고장 임계점 (0.20)",
                     fill: "var(--error)",
                     fontSize: 10,
                     position: "insideTopLeft",
@@ -417,12 +417,12 @@ export default function DataHistory() {
                   (mm/s)
                 </Th>
                 <Th style={{ color: "var(--waiting)" }}>
-                  주의 임계점
+                  위험 임계점
                   <br />
                   (mm/s)
                 </Th>
                 <Th style={{ color: "var(--error)" }}>
-                  위험 임계점 <br />
+                  고장 임계점 <br />
                   (mm/s)
                 </Th>
                 <Th style={{ color: "var(--font)" }}>

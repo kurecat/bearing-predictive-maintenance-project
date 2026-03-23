@@ -11,7 +11,7 @@ const Layout = ({ children, toggleTheme }) => {
   const [globalNotifications, setGlobalNotifications] = useState([]);
   const [sensorHistory, setSensorHistory] = useState([]);
 
-  const socketQueue = new SocketQueue("ws://localhost:8000/socket/devices");
+  const socketQueue = new SocketQueue("ws://192.168.1.66:8000/socket/devices");
 
   useEffect(() => {
     socketQueue.connect();
@@ -39,13 +39,15 @@ const Layout = ({ children, toggleTheme }) => {
       // === 전역 센서 기록 추가 ===
       addSensorRecord({
         id: metadata.device_ref,
-        name: device?.alias ?? device.motor_spec.model,   // 노드에서 쓰는 name 포함
-        vibration: rms?.[0] ? parseFloat(rms[0].toFixed(3)) : metadata.vibration ?? 0.0,
+        name: device?.alias ?? device.motor_spec.model, // 노드에서 쓰는 name 포함
+        vibration: rms?.[0]
+          ? parseFloat(rms[0].toFixed(3))
+          : (metadata.vibration ?? 0.0),
         prob: metadata.prob ? parseFloat(metadata.prob.toFixed(2)) : 0,
         label: (metadata.prob ?? 0) >= 80 ? 1 : 0,
         date: dateString,
         time: timeString,
-        filename: metadata.filename,                  // 노드에서 쓰는 filename 포함
+        filename: metadata.filename, // 노드에서 쓰는 filename 포함
       });
     });
   }, []);

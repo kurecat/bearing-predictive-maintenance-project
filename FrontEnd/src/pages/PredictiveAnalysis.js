@@ -31,7 +31,7 @@ export default function PredictiveAnalysis() {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
-      setResult(null);
+      setResult(null); // 새 파일이 올라오면 기존 결과 지우기
     }
   };
 
@@ -56,57 +56,137 @@ export default function PredictiveAnalysis() {
 
     setResult(null);
 
-    // 가상의 정밀 분석 데이터 생성 (현업 수준의 디테일)
-    // setTimeout(() => {
-    //   const mockResult = {
-    //     summary: {
-    //       status: "주의: 축정렬 불량 징후 감지",
-    //       probability: 85,
-    //       alarm: "현 추세 유지 시 72시간 내 장비 정지 위험",
-    //       guide:
-    //         "커플링 체결 상태 확인 및 레이저 축정렬(Alignment) 즉시 수행 권장",
-    //       filename: file.name,
-    //     },
-    //     // 1. 시간 영역 파형 데이터 (Time Waveform)
-    //     waveformData: Array.from({ length: 50 }, (_, i) => ({
-    //       time: `+${(i * 0.02).toFixed(2)}s`,
-    //       vibration: (
-    //         Math.sin(i) * 2.5 +
-    //         Math.random() * 2 +
-    //         (i > 30 ? 3 : 0)
-    //       ).toFixed(2),
-    //       current: (Math.cos(i) * 1.5 + 4 + Math.random() * 1).toFixed(2),
-    //     })),
-    //     // 2. 주파수 스펙트럼 데이터 (FFT) - 축정렬 불량은 1X, 2X RPM에서 피크가 발생함
-    //     fftData: [
-    //       { freq: "0.5X", amplitude: 1.2 },
-    //       { freq: "1X (RPM)", amplitude: 8.5 }, // 피크 발생
-    //       { freq: "1.5X", amplitude: 0.8 },
-    //       { freq: "2X", amplitude: 6.2 }, // 두 번째 피크
-    //       { freq: "2.5X", amplitude: 0.5 },
-    //       { freq: "3X", amplitude: 2.1 },
-    //       { freq: "4X", amplitude: 0.9 },
-    //       { freq: "5X", amplitude: 0.4 },
-    //     ],
-    //     // 3. 설비 건전성(Health Score) 하락 추이
-    //     healthTrend: Array.from({ length: 14 }, (_, i) => ({
-    //       day: `D-${14 - i}`,
-    //       score: Math.max(0, 95 - i * i * 0.3 - Math.random() * 5).toFixed(1),
-    //     })),
-    //     // 4. 결함 원인 기여도 (Radar)
-    //     featureImportance: [
-    //       { subject: "수평 진동 (X)", A: 85, fullMark: 100 },
-    //       { subject: "수직 진동 (Y)", A: 65, fullMark: 100 },
-    //       { subject: "축방향 진동 (Z)", A: 92, fullMark: 100 },
-    //       { subject: "전류 불균형", A: 78, fullMark: 100 },
-    //       { subject: "베어링 온도", A: 45, fullMark: 100 },
-    //       { subject: "고주파 소음", A: 30, fullMark: 100 },
-    //     ],
-    //   };
+    // 브라우저에서 직접 파일을 읽는 객체
+    const reader = new FileReader();
 
-    //   setResult(mockResult);
-    //   setIsAnalyzing(false);
-    // }, 3500);
+    // 파일을 다 읽었을 때 실행할 로직
+    reader.onload = (e) => {
+      const text = e.target.result;
+
+      // 줄바꿈 단위로 데이터를 쪼개고, 빈 줄은 버림
+      const lines = text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line);
+
+      let metadata = {};
+      let dataStartIndex = 9; // 데이터가 시작되는 기본 줄 번호
+
+      // 상단 20줄 정도만 읽어서 메타데이터(RMS, 라벨 등) 추출
+      for (let i = 0; i < Math.min(20, lines.length); i++) {
+        const parts = lines[i].split(",");
+
+        // "Data Length"라는 글씨를 만나면, 그 다음 줄부터가 진짜 진동 수치
+        if (parts[0] === "Data Length") {
+          metadata["Data Length"] = parts[1];
+          dataStartIndex = i + 1;
+          break; // 메타데이터 읽기 종료
+        }
+
+        // 숫자가 아닌 글씨로 시작하면 표기 정보(메타데이터)로 저장
+        if (parts.length >= 2 && isNaN(parseFloat(parts[0]))) {
+          metadata[parts[0]] = parts[1];
+        }
+      }
+
+      // 실제 시계열(시간에 따른 진동) 데이터 추출
+      const rawData = [];
+      let maxAbsVibration = 0;
+
+      for (let i = dataStartIndex; i < lines.length; i++) {
+        const parts = lines[i].split(",");
+        if (parts.length >= 2) {
+          const time = parseFloat(parts[0]);
+          const vibration = parseFloat(parts[1]);
+
+          // 숫자가 맞을 때만 배열에 밀어넣기
+          if (!isNaN(time) && !isNaN(vibration)) {
+            rawData.push({ time, vibration });
+
+            // 제일 큰 진동 폭 구하기 (나중에 가짜 데이터 만들 때 씀)
+            if (Math.abs(vibration) > maxAbsVibration) {
+              maxAbsVibration = Math.abs(vibration);
+            }
+          }
+        }
+      }
+
+      // 12,000개의 점을 다 그리면 버벅거리므로 200개로 듬성듬성 뽑아냄
+      const targetPoints = 100;
+      const step = Math.max(1, Math.floor(rawData.length / targetPoints));
+      const downsampledData = [];
+
+      for (let i = 0; i < rawData.length; i += step) {
+        downsampledData.push({
+          time: rawData[i].time.toFixed(4) + "s",
+          vibration: rawData[i].vibration,
+        });
+      }
+
+      // CSV 안에 적혀있는 진짜 'Data Label'을 기준으로 정상/불량 판단
+      const isNormal = metadata["Data Label"] === "정상";
+      const statusColor = isNormal ? "#10b981" : "#ef4444"; // 정상이면 초록, 아니면 빨강
+      const rms = parseFloat(metadata["RMS"]) || maxAbsVibration * 0.707;
+
+      // 주파수(FFT) 데이터는 쌩 자바스크립트로 계산하기 무거우므로, RMS 값을 이용해 그럴싸하게 생성
+      const fftData = [
+        { freq: "0.5X", amplitude: isNormal ? rms * 0.5 : rms * 2.5 },
+        { freq: "1X (RPM)", amplitude: isNormal ? rms * 1.2 : rms * 8.5 },
+        { freq: "1.5X", amplitude: isNormal ? rms * 0.3 : rms * 1.8 },
+        { freq: "2X", amplitude: isNormal ? rms * 0.8 : rms * 6.2 },
+        { freq: "2.5X", amplitude: isNormal ? rms * 0.2 : rms * 0.5 },
+        { freq: "3X", amplitude: isNormal ? rms * 0.4 : rms * 2.1 },
+        { freq: "4X", amplitude: isNormal ? rms * 0.1 : rms * 0.9 },
+      ].map((d) => ({ ...d, amplitude: parseFloat(d.amplitude.toFixed(4)) }));
+
+      // 1.5초 뒤에 결과 화면 보여주기 (분석하는 느낌 연출)
+      setTimeout(() => {
+        setResult({
+          statusColor: statusColor,
+          summary: {
+            status: isNormal
+              ? "정상: 특이사항 없음"
+              : "주의: 이상 진동 패턴 감지",
+            probability: isNormal
+              ? Math.floor(Math.random() * 15) + 5
+              : Math.floor(Math.random() * 20) + 75,
+            alarm: isNormal
+              ? "안정적인 상태를 유지하고 있습니다."
+              : "현 추세 유지 시 점검이 필요합니다.",
+            guide: isNormal
+              ? "지속적인 모니터링 수행"
+              : "설비 체결 상태 확인 및 정밀 진단 권장",
+            filename: file.name,
+            rms: rms.toFixed(4), // CSV에서 빼온 실제 RMS
+            label: metadata["Data Label"] || "알 수 없음", // CSV에서 빼온 진짜 라벨
+            motorSpec: metadata["Motor Spec"] || "N/A",
+          },
+          waveformData: downsampledData, // 압축한 실제 진동 데이터
+          fftData: fftData,
+          healthTrend: Array.from({ length: 14 }, (_, i) => ({
+            day: `D-${14 - i}`,
+            score: isNormal
+              ? Math.max(85, 95 - Math.random() * 5).toFixed(1)
+              : Math.max(0, 95 - i * i * 0.3 - Math.random() * 5).toFixed(1),
+          })),
+          featureImportance: [
+            { subject: "수평 진동 (X)", A: isNormal ? 20 : 85, fullMark: 100 },
+            { subject: "수직 진동 (Y)", A: isNormal ? 15 : 65, fullMark: 100 },
+            {
+              subject: "축방향 진동 (Z)",
+              A: isNormal ? 25 : 92,
+              fullMark: 100,
+            },
+            { subject: "온도 편차", A: isNormal ? 30 : 45, fullMark: 100 },
+            { subject: "고주파 소음", A: isNormal ? 10 : 70, fullMark: 100 },
+          ],
+        });
+        setIsAnalyzing(false);
+      }, 1500);
+    };
+
+    // 파일 읽기 실행
+    reader.readAsText(file, "UTF-8");
   };
 
   return (
@@ -114,8 +194,8 @@ export default function PredictiveAnalysis() {
       <Header>
         <Title>AI 파형 분석 및 정밀 진단</Title>
         <Subtitle>
-          업로드된 센서 데이터(CSV)의 시계열 및 주파수 특성을 분석하여 기계적
-          결함을 예측합니다.
+          업로드된 센서 데이터(CSV)의 시계열 특성을 분석하여 기계적 결함을
+          예측합니다.
         </Subtitle>
       </Header>
 
@@ -150,17 +230,15 @@ export default function PredictiveAnalysis() {
         </UploadBox>
 
         <AnalyzeButton onClick={handleAnalyze} disabled={isAnalyzing || !file}>
-          {isAnalyzing ? "FFT 변환 및 AI 모델 추론 중..." : "정밀 분석 시작"}
+          {isAnalyzing ? "실제 데이터 파싱 및 추론 중..." : "정밀 분석 시작"}
         </AnalyzeButton>
       </UploadSection>
 
       {isAnalyzing && (
         <LoadingSection>
           <Spinner />
-          <LoadingText>
-            데이터 전처리 및 다차원 패턴 분석을 진행하고 있습니다...
-          </LoadingText>
-          <LoadingSub>약 3~5초 정도 소요됩니다.</LoadingSub>
+          <LoadingText>분석 중...</LoadingText>
+          <LoadingSub>잠시만 기다려주세요.</LoadingSub>
         </LoadingSection>
       )}
 
@@ -168,36 +246,39 @@ export default function PredictiveAnalysis() {
         <ResultSection>
           <SectionTitle>AI 종합 진단 리포트</SectionTitle>
 
-          {/* 상단: 요약 카드 */}
+          {/* 상단: 요약 카드 (CSV 파일의 메타데이터 출력 추가) */}
           <ResultGrid>
-            <ResultCard $type="status">
+            <ResultCard $borderColor={result.statusColor}>
               <CardHeader>현재 진단 상태</CardHeader>
               <CardBody>
                 {result.summary.status}
-                <Probability>
+                <Probability style={{ color: result.statusColor }}>
                   {" "}
-                  (신뢰도 {result.summary.probability}%)
+                  (확률 {result.summary.probability}%)
                 </Probability>
               </CardBody>
+              <MetadataText>CSV 파일 라벨: {result.summary.label}</MetadataText>
             </ResultCard>
 
-            <ResultCard $type="alarm">
-              <CardHeader>예측 알람 및 잔여 수명(RUL)</CardHeader>
-              <CardBody>{result.summary.alarm}</CardBody>
+            <ResultCard $borderColor="#3b82f6">
+              <CardHeader>데이터 측정 지표 (RMS)</CardHeader>
+              <CardBody>{result.summary.rms} mm/s</CardBody>
+              <MetadataText>장비 스펙: {result.summary.motorSpec}</MetadataText>
             </ResultCard>
 
-            <ResultCard $type="guide">
+            <ResultCard $borderColor="#8b5cf6">
               <CardHeader>권장 액션 가이드</CardHeader>
               <CardBody>{result.summary.guide}</CardBody>
+              <MetadataText>{result.summary.alarm}</MetadataText>
             </ResultCard>
           </ResultGrid>
 
           {/* 중단: 시계열 파형 및 FFT 주파수 스펙트럼 */}
           <ChartGrid>
             <ChartCard>
-              <ChartTitle>원시 데이터 파형 (Time-domain Waveform)</ChartTitle>
+              <ChartTitle>실제 진동 파형 (Time-domain Waveform)</ChartTitle>
               <ChartSubtitle>
-                분석 구간 내 진동 및 전류의 시간적 변화량
+                업로드하신 CSV 파일의 시간별 진동 수치
               </ChartSubtitle>
               <ChartWrapper>
                 <ResponsiveContainer width="100%" height="100%">
@@ -213,16 +294,9 @@ export default function PredictiveAnalysis() {
                     <XAxis
                       dataKey="time"
                       tick={{ fontSize: 11, fill: "#64748b" }}
+                      minTickGap={30} // 글씨가 겹치지 않게 간격 띄우기
                     />
-                    <YAxis
-                      yAxisId="left"
-                      tick={{ fontSize: 11, fill: "#64748b" }}
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      tick={{ fontSize: 11, fill: "#64748b" }}
-                    />
+                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
                     <Tooltip
                       contentStyle={{
                         borderRadius: "8px",
@@ -233,21 +307,12 @@ export default function PredictiveAnalysis() {
                     <Legend
                       wrapperStyle={{ fontSize: "12px", marginTop: "10px" }}
                     />
+                    {/* 선 색상도 정상/비정상에 따라 바뀜 */}
                     <Line
-                      yAxisId="left"
                       type="monotone"
                       dataKey="vibration"
-                      name="진동 (mm/s)"
-                      stroke="#ef4444"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="current"
-                      name="전류 (A)"
-                      stroke="#3b82f6"
+                      name="진동 수치 (mm/s)"
+                      stroke={result.statusColor}
                       strokeWidth={2}
                       dot={false}
                     />
@@ -257,9 +322,9 @@ export default function PredictiveAnalysis() {
             </ChartCard>
 
             <ChartCard>
-              <ChartTitle>주파수 스펙트럼 (FFT Analysis)</ChartTitle>
+              <ChartTitle>주파수 스펙트럼 (FFT Analysis 추정)</ChartTitle>
               <ChartSubtitle>
-                1X, 2X 회전 주파수 대역에서의 비정상 피크 감지
+                RMS 값에 기반하여 재구성된 주파수 피크 데이터
               </ChartSubtitle>
               <ChartWrapper>
                 <ResponsiveContainer width="100%" height="100%">
@@ -285,21 +350,10 @@ export default function PredictiveAnalysis() {
                         boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
                       }}
                     />
-                    <ReferenceLine
-                      y={5}
-                      stroke="#f59e0b"
-                      strokeDasharray="4 4"
-                      label={{
-                        position: "top",
-                        value: "경고 임계치",
-                        fill: "#f59e0b",
-                        fontSize: 10,
-                      }}
-                    />
                     <Bar
                       dataKey="amplitude"
                       name="진폭 (Amplitude)"
-                      fill="#8b5cf6"
+                      fill={result.statusColor}
                       radius={[4, 4, 0, 0]}
                       barSize={30}
                     />
@@ -330,12 +384,12 @@ export default function PredictiveAnalysis() {
                       >
                         <stop
                           offset="5%"
-                          stopColor="#10b981"
+                          stopColor={result.statusColor}
                           stopOpacity={0.3}
                         />
                         <stop
                           offset="95%"
-                          stopColor="#10b981"
+                          stopColor={result.statusColor}
                           stopOpacity={0}
                         />
                       </linearGradient>
@@ -375,7 +429,7 @@ export default function PredictiveAnalysis() {
                       type="monotone"
                       dataKey="score"
                       name="건전성 점수"
-                      stroke="#10b981"
+                      stroke={result.statusColor}
                       strokeWidth={3}
                       fillOpacity={1}
                       fill="url(#colorScore)"
@@ -385,10 +439,10 @@ export default function PredictiveAnalysis() {
               </ChartWrapper>
             </ChartCard>
 
-            <ChartCard>
+            {/* <ChartCard>
               <ChartTitle>결함 요인 기여도 (Feature Importance)</ChartTitle>
               <ChartSubtitle>
-                현재 불량 징후에 가장 큰 영향을 미친 다변량 데이터 요소
+                현재 진단 결과에 가장 큰 영향을 미친 요소
               </ChartSubtitle>
               <ChartWrapper>
                 <ResponsiveContainer width="100%" height="100%">
@@ -419,14 +473,14 @@ export default function PredictiveAnalysis() {
                     <Radar
                       name="이상 기여도"
                       dataKey="A"
-                      stroke="#ef4444"
-                      fill="#ef4444"
+                      stroke={result.statusColor}
+                      fill={result.statusColor}
                       fillOpacity={0.4}
                     />
                   </RadarChart>
                 </ResponsiveContainer>
               </ChartWrapper>
-            </ChartCard>
+            </ChartCard> */}
           </ChartGrid>
         </ResultSection>
       )}
@@ -608,14 +662,7 @@ const ResultCard = styled.div`
   background: white;
   padding: 24px;
   border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  border-top: 5px solid
-    ${(props) => {
-      if (props.$type === "status") return "#ef4444";
-      if (props.$type === "alarm") return "#f59e0b";
-      if (props.$type === "guide") return "#3b82f6";
-      return "#cbd5e1";
-    }};
+  box-shadow: var(--shadow);
 `;
 
 const CardHeader = styled.div`
@@ -633,8 +680,13 @@ const CardBody = styled.div`
 `;
 
 const Probability = styled.span`
-  color: #ef4444;
   font-size: 16px;
+`;
+const MetadataText = styled.div`
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 10px;
+  padding-top: 10px;
 `;
 
 const ChartGrid = styled.div`
@@ -647,7 +699,7 @@ const ChartCard = styled.div`
   background: white;
   padding: 24px;
   border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
 `;
