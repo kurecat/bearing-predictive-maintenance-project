@@ -20,6 +20,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import axiosApi from "../api/AxiosApi.js";
+
 
 export default function PredictiveAnalysis() {
   const [file, setFile] = useState(null);
@@ -40,59 +42,71 @@ export default function PredictiveAnalysis() {
     }
 
     setIsAnalyzing(true);
+    
+    // 데이터 받기
+    axiosApi.post("/analyze", { filename: file.name })
+      .then((response) => {
+        setResult(response);
+        setIsAnalyzing(false);
+      })
+      .catch((error) => {
+        console.error("Analysis Error:", error);
+        setIsAnalyzing(false);
+      });
+
     setResult(null);
 
     // 가상의 정밀 분석 데이터 생성 (현업 수준의 디테일)
-    setTimeout(() => {
-      const mockResult = {
-        summary: {
-          status: "주의: 축정렬 불량 징후 감지",
-          probability: 85,
-          alarm: "현 추세 유지 시 72시간 내 장비 정지 위험",
-          guide:
-            "커플링 체결 상태 확인 및 레이저 축정렬(Alignment) 즉시 수행 권장",
-          filename: file.name,
-        },
-        // 1. 시간 영역 파형 데이터 (Time Waveform)
-        waveformData: Array.from({ length: 50 }, (_, i) => ({
-          time: `+${(i * 0.02).toFixed(2)}s`,
-          vibration: (
-            Math.sin(i) * 2.5 +
-            Math.random() * 2 +
-            (i > 30 ? 3 : 0)
-          ).toFixed(2),
-          current: (Math.cos(i) * 1.5 + 4 + Math.random() * 1).toFixed(2),
-        })),
-        // 2. 주파수 스펙트럼 데이터 (FFT) - 축정렬 불량은 1X, 2X RPM에서 피크가 발생함
-        fftData: [
-          { freq: "0.5X", amplitude: 1.2 },
-          { freq: "1X (RPM)", amplitude: 8.5 }, // 피크 발생
-          { freq: "1.5X", amplitude: 0.8 },
-          { freq: "2X", amplitude: 6.2 }, // 두 번째 피크
-          { freq: "2.5X", amplitude: 0.5 },
-          { freq: "3X", amplitude: 2.1 },
-          { freq: "4X", amplitude: 0.9 },
-          { freq: "5X", amplitude: 0.4 },
-        ],
-        // 3. 설비 건전성(Health Score) 하락 추이
-        healthTrend: Array.from({ length: 14 }, (_, i) => ({
-          day: `D-${14 - i}`,
-          score: Math.max(0, 95 - i * i * 0.3 - Math.random() * 5).toFixed(1),
-        })),
-        // 4. 결함 원인 기여도 (Radar)
-        featureImportance: [
-          { subject: "수평 진동 (X)", A: 85, fullMark: 100 },
-          { subject: "수직 진동 (Y)", A: 65, fullMark: 100 },
-          { subject: "축방향 진동 (Z)", A: 92, fullMark: 100 },
-          { subject: "전류 불균형", A: 78, fullMark: 100 },
-          { subject: "베어링 온도", A: 45, fullMark: 100 },
-          { subject: "고주파 소음", A: 30, fullMark: 100 },
-        ],
-      };
+    // setTimeout(() => {
+    //   const mockResult = {
+    //     summary: {
+    //       status: "주의: 축정렬 불량 징후 감지",
+    //       probability: 85,
+    //       alarm: "현 추세 유지 시 72시간 내 장비 정지 위험",
+    //       guide:
+    //         "커플링 체결 상태 확인 및 레이저 축정렬(Alignment) 즉시 수행 권장",
+    //       filename: file.name,
+    //     },
+    //     // 1. 시간 영역 파형 데이터 (Time Waveform)
+    //     waveformData: Array.from({ length: 50 }, (_, i) => ({
+    //       time: `+${(i * 0.02).toFixed(2)}s`,
+    //       vibration: (
+    //         Math.sin(i) * 2.5 +
+    //         Math.random() * 2 +
+    //         (i > 30 ? 3 : 0)
+    //       ).toFixed(2),
+    //       current: (Math.cos(i) * 1.5 + 4 + Math.random() * 1).toFixed(2),
+    //     })),
+    //     // 2. 주파수 스펙트럼 데이터 (FFT) - 축정렬 불량은 1X, 2X RPM에서 피크가 발생함
+    //     fftData: [
+    //       { freq: "0.5X", amplitude: 1.2 },
+    //       { freq: "1X (RPM)", amplitude: 8.5 }, // 피크 발생
+    //       { freq: "1.5X", amplitude: 0.8 },
+    //       { freq: "2X", amplitude: 6.2 }, // 두 번째 피크
+    //       { freq: "2.5X", amplitude: 0.5 },
+    //       { freq: "3X", amplitude: 2.1 },
+    //       { freq: "4X", amplitude: 0.9 },
+    //       { freq: "5X", amplitude: 0.4 },
+    //     ],
+    //     // 3. 설비 건전성(Health Score) 하락 추이
+    //     healthTrend: Array.from({ length: 14 }, (_, i) => ({
+    //       day: `D-${14 - i}`,
+    //       score: Math.max(0, 95 - i * i * 0.3 - Math.random() * 5).toFixed(1),
+    //     })),
+    //     // 4. 결함 원인 기여도 (Radar)
+    //     featureImportance: [
+    //       { subject: "수평 진동 (X)", A: 85, fullMark: 100 },
+    //       { subject: "수직 진동 (Y)", A: 65, fullMark: 100 },
+    //       { subject: "축방향 진동 (Z)", A: 92, fullMark: 100 },
+    //       { subject: "전류 불균형", A: 78, fullMark: 100 },
+    //       { subject: "베어링 온도", A: 45, fullMark: 100 },
+    //       { subject: "고주파 소음", A: 30, fullMark: 100 },
+    //     ],
+    //   };
 
-      setResult(mockResult);
-      setIsAnalyzing(false);
-    }, 3500);
+    //   setResult(mockResult);
+    //   setIsAnalyzing(false);
+    // }, 3500);
   };
 
   return (

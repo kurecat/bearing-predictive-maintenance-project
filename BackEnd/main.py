@@ -88,7 +88,7 @@ def find_or_create_device(spec: Dict[str, Any]) -> ObjectId:
         return existing["_id"]
     else:
         # MotorSpec 필드들을 조합해서 alias 생성
-        alias = f"{spec['model']} | {spec['rpm']}rpm | {spec['power_kw']}kW | {spec['pole']}극"
+        alias = spec['model']
 
         result = devices_col.insert_one({
             "motor_spec": spec,
