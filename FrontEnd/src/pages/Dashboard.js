@@ -20,13 +20,13 @@ import { NotificationContext } from "../components/Layout";
 import SocketQueue from '../api/SocketQueue.js';
 
 // 9개 모터 초기 상태
-const initialNodes = Array.from({ length: 9 }, (_, i) => ({
-  id: `MTR-${101 + i}`,
-  name: `${i + 1}호기`,
-  vibration: 0.02,
-  current: 2.1,
-  prob: 5,
-}));
+// const initialNodes = Array.from({ length: 9 }, (_, i) => ({
+//   id: `MTR-${101 + i}`,
+//   name: `${i + 1}호기`,
+//   vibration: 0.02,
+//   current: 2.1,
+//   prob: 5,
+// }));
 
 export default function Dashboard() {
   // const [nodes, setNodes] = useState(initialNodes);
@@ -110,13 +110,57 @@ export default function Dashboard() {
 
   useEffect(() => {
     socketQueue.connect();
-    socketQueue.onMessage((message) => {
-      console.log("Received message from WebSocket:", message);
+
+    socketQueue.onMessage(() => {
+      const rawMessage = socketQueue.getMessage();
+      if (!rawMessage) return;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(rawMessage);
+      } catch (e) {
+        console.error("Invalid message format:", rawMessage);
+        return;
+      }
+
+      const device = parsed?.payload?.device;
+      const metadata = parsed?.payload?.metadata;
+      const rms = parsed?.payload?.rms;
+      if (!metadata) return;
+
+      console.log("Received from WebSocket:", parsed);
+
       setNodes((prevNodes) => {
-        const updatedNodes = prevNodes.map((node) =>
-          node.id === message.id ? { ...node, ...message } : node,
-        );
-        return updatedNodes;
+        const exists = prevNodes.some((node) => node.id === metadata.device_ref);
+
+        if (exists) {
+          console.log("Updating existing node:", metadata.device_ref);
+          return prevNodes.map((node) =>
+            node.id === metadata.device_ref
+              ? {
+                ...node,
+                name: device?.alias ?? node.name,           // name은 device.alias
+                vibration: (rms?.[0] * 1000).toFixed(3) ?? node.vibration,
+                prob: metadata.prob ?? node.prob,
+                date: metadata.date,
+                filename: metadata.filename,
+              }
+              : node
+          );
+        } else {
+          console.log("Adding new node:", metadata.device_ref);
+          return [
+            ...prevNodes,
+            {
+              id: metadata.device_ref,
+              name: device?.alias ?? "",
+              vibration: metadata.vibration ?? 0.0,
+              prob: metadata.prob ?? 0,
+              date: metadata.date,
+              filename: metadata.filename,
+            },
+          ];
+        }
       });
     });
   }, []);
@@ -309,10 +353,12 @@ export default function Dashboard() {
             <RealTimeCard key={node.id}>
               <CardLeft>
                 <MachineName>{node.name}</MachineName>
-                <BigNumber>
-                  {node.prob.toFixed(1)}
-                  <UnitSpan>%</UnitSpan>
-                </BigNumber>
+                {node.prob && (
+                  <BigNumber>
+                    {node.prob.toFixed(1)}
+                    <UnitSpan>%</UnitSpan>
+                  </BigNumber>
+                )}
                 <NodeStatusBadge
                   $status={
                     isDanger ? "danger" : isWarning ? "warning" : "normal"

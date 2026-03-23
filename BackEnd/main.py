@@ -1,9 +1,11 @@
 from fastapi import FastAPI, WebSocket
+import numpy as np
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from pymongo import MongoClient
 import uvicorn
+from predictor import predict
 
 # === MongoDB 연결 ===
 client = MongoClient("mongodb://localhost:27017")
@@ -31,7 +33,7 @@ class MotorSpec(BaseModel):
 class Device(BaseModel):
     _id: Optional[str]
     motor_spec: MotorSpec
-    alias: str = "0"
+    alias: str
 
 class RMS(BaseModel):
     _id: Optional[str]
@@ -55,6 +57,8 @@ class Metadata(BaseModel):
     data_length: int
     rms_id: str
     samples_id: str
+    prob: Optional[float] = None
+    probs: Optional[List[float]] = None
 
 class UploadData(BaseModel):
     Date: str
@@ -83,16 +87,24 @@ def find_or_create_device(spec: Dict[str, Any]) -> ObjectId:
     if existing:
         return existing["_id"]
     else:
+        # MotorSpec 필드들을 조합해서 alias 생성
+        alias = f"{spec['model']} | {spec['rpm']}rpm | {spec['power_kw']}kW | {spec['pole']}극"
+
         result = devices_col.insert_one({
             "motor_spec": spec,
-            "alias": "0"
+            "alias": alias
         })
         return result.inserted_id
     
-async def broadcast_event(event: str, meta: dict, rms_values: list):
+async def broadcast_event(event: str, device: dict, meta: dict, rms_values: list):
     payload = {
         "event": event,
         "payload": {
+            "device": {
+                "_id": str(device["_id"]),
+                "motor_spec": device["motor_spec"],
+                "alias": device.get("alias"),
+            },
             "metadata": {
                 "_id": str(meta["_id"]),
                 "device_ref": str(meta["device_ref"]),
@@ -102,10 +114,14 @@ async def broadcast_event(event: str, meta: dict, rms_values: list):
                 "label_no": meta.get("label_no"),
                 "period": meta["period"],
                 "sample_rate": meta["sample_rate"],
-                "data_length": meta["data_length"]
+                "data_length": meta["data_length"],
+                "prob": meta["prob"],
+                "probs": meta["probs"],
+                "rms_id": str(meta["rms_id"]),
+                "samples_id": str(meta["samples_id"]),
             },
-            "rms": rms_values
-        }
+            "rms": rms_values,
+        },
     }
     for conn in active_connections:
         await conn.send_json(payload)
@@ -151,6 +167,7 @@ async def upload_current(data: UploadData):
 async def upload_vibration(data: UploadData):
     spec = parse_motor_spec(data.MotorSpec)
     device_ref = find_or_create_device(spec)
+    device = devices_col.find_one({"_id": device_ref})
 
     rms_result = vibration_rms_col.insert_one({
         "device_ref": device_ref,
@@ -164,6 +181,10 @@ async def upload_vibration(data: UploadData):
     })
     samples_id = samples_result.inserted_id
 
+    # === 모델 추론 호출 ===
+    probs = predict(data.Samples)
+    prob = max(probs) if probs else None
+
     meta_result = vibration_metadata_col.insert_one({
         "device_ref": device_ref,
         "date": data.Date,
@@ -174,13 +195,16 @@ async def upload_vibration(data: UploadData):
         "sample_rate": data.SampleRate,
         "data_length": data.DataLength,
         "rms_id": rms_id,
-        "samples_id": samples_id
+        "samples_id": samples_id,
+        "prob": prob,
+        "probs": probs
     })
 
     meta_doc = vibration_metadata_col.find_one({"_id": meta_result.inserted_id})
-    await broadcast_event("vibration_data", meta_doc, data.RMS)
+    await broadcast_event("vibration_data", device, meta_doc, data.RMS)
 
     return {"status": "ok", "metadata_id": str(meta_result.inserted_id)}
+
 
 # === 조회 엔드포인트 (Devices) ===
 @app.get("/api/devices")
