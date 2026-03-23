@@ -25,7 +25,7 @@ export default function Topbar({ toggleSidebar }) {
     : 0;
 
   const getTabLabel = (path) => {
-    if (path.includes("/history")) return "데이터 예측 및 이력";
+    if (path.includes("/history")) return "데이터 로그";
     if (path.includes("/analysis")) return "Analysis";
     return "대시보드";
   };

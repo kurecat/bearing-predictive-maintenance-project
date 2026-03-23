@@ -13,7 +13,6 @@ import {
 } from "recharts";
 import { NotificationContext } from "../components/Layout";
 
-// 9개 모터의 그래프 선 색상
 const CHART_COLORS = [
   "#ef4444",
   "#f97316",
@@ -37,7 +36,6 @@ export default function DataHistory() {
   const itemsPerPage = 30;
   const pagesPerBlock = 10;
 
-  // 그래프 선을 숨기거나 켤 때 사용할 상태 (모터 ID를 저장)
   const [hiddenLines, setHiddenLines] = useState({});
 
   const filteredHistory = useMemo(() => {
@@ -62,10 +60,26 @@ export default function DataHistory() {
     setCurrentPage(1);
   }, [selectedDevice, startDate, endDate]);
 
+  const deviceList = useMemo(() => {
+    const ids = sensorHistory.map((item) => item.id);
+    return [...new Set(ids)].sort();
+  }, [sensorHistory]);
+
   // 필터 조건이 바뀌면 숨겨진 선 상태를 초기화
   useEffect(() => {
-    setHiddenLines({});
-  }, [selectedDevice]);
+    if (!selectedDevice) {
+      // 전체 장비 조회 시: 평균선은 보이고, 개별 모터 선은 모두 숨김
+      const initialHidden = {};
+      deviceList.forEach((id) => {
+        initialHidden[id] = true;
+      });
+      initialHidden["average"] = false;
+      setHiddenLines(initialHidden);
+    } else {
+      // 특정 장비 1개 조회 시: 모두 보이게 초기화
+      setHiddenLines({});
+    }
+  }, [selectedDevice, deviceList]);
 
   const currentBlock = Math.ceil(currentPage / pagesPerBlock);
   const startPage = (currentBlock - 1) * pagesPerBlock + 1;
@@ -83,11 +97,7 @@ export default function DataHistory() {
   ).length;
   const successCount = filteredHistory.filter((m) => m.prob < 30).length;
 
-  const deviceList = useMemo(() => {
-    const ids = sensorHistory.map((item) => item.id);
-    return [...new Set(ids)].sort();
-  }, [sensorHistory]);
-
+  // 차트 데이터 20개 (가장 최신 데이터부터) + 분 단위 평균 및 전체 평균 추가
   const chartData = useMemo(() => {
     const grouped = {};
 
@@ -97,44 +107,44 @@ export default function DataHistory() {
         timeParts.length >= 2 ? `${timeParts[0]}:${timeParts[1]}` : item.time;
 
       if (!grouped[minuteTime]) {
-        grouped[minuteTime] = { time: minuteTime, count: {} };
+        grouped[minuteTime] = {
+          time: minuteTime,
+          count: { total: 0 },
+          totalVibration: 0,
+        };
       }
 
-      if (selectedDevice) {
-        if (!grouped[minuteTime].vibration) {
-          grouped[minuteTime].vibration = 0;
-          grouped[minuteTime].count.total = 0;
-        }
-        grouped[minuteTime].vibration += item.vibration;
-        grouped[minuteTime].count.total += 1;
-      } else {
-        if (!grouped[minuteTime][item.id]) {
-          grouped[minuteTime][item.id] = 0;
-          grouped[minuteTime].count[item.id] = 0;
-        }
-        grouped[minuteTime][item.id] += item.vibration;
-        grouped[minuteTime].count[item.id] += 1;
+      // 개별 모터별 누적
+      if (!grouped[minuteTime][item.id]) {
+        grouped[minuteTime][item.id] = 0;
+        grouped[minuteTime].count[item.id] = 0;
       }
+      grouped[minuteTime][item.id] += item.vibration;
+      grouped[minuteTime].count[item.id] += 1;
+
+      // 전체 모터 누적 (평균선 계산용)
+      grouped[minuteTime].totalVibration += item.vibration;
+      grouped[minuteTime].count.total += 1;
     });
 
     const averagedData = Object.values(grouped).map((group) => {
       const result = { time: group.time };
-      if (selectedDevice) {
-        result.vibration = parseFloat(
-          (group.vibration / group.count.total).toFixed(3),
-        );
-      } else {
-        deviceList.forEach((id) => {
-          if (group[id] !== undefined) {
-            result[id] = parseFloat((group[id] / group.count[id]).toFixed(3));
-          }
-        });
-      }
+      // 전체 평균 계산
+      result.average = parseFloat(
+        (group.totalVibration / group.count.total).toFixed(3),
+      );
+
+      // 개별 모터 평균 계산
+      deviceList.forEach((id) => {
+        if (group[id] !== undefined) {
+          result[id] = parseFloat((group[id] / group.count[id]).toFixed(3));
+        }
+      });
       return result;
     });
 
     return averagedData.slice(-20);
-  }, [filteredHistory, selectedDevice, deviceList]);
+  }, [filteredHistory, deviceList]);
 
   const getStatusInfo = (prob) => {
     if (prob >= 70) return { text: "위험", type: "danger" };
@@ -228,11 +238,13 @@ export default function DataHistory() {
                     cursor: "pointer",
                   }}
                   onClick={handleLegendClick} // 클릭 이벤트 추가
-                  formatter={(value) => (
+                  formatter={(value, entry) => (
                     // 클릭하여 숨긴 상태면 범례 글씨 색을 흐리게 처리
                     <span
                       style={{
-                        color: hiddenLines[value] ? "#cbd5e1" : "var(--font2)",
+                        color: hiddenLines[entry.dataKey]
+                          ? "#cbd5e1"
+                          : "var(--font2)",
                       }}
                     >
                       {value}
@@ -247,8 +259,20 @@ export default function DataHistory() {
                   label={{
                     value: "정상 패턴 (0.02)",
                     fill: "var(--main)",
-                    fontSize: 11,
+                    fontSize: 10,
                     position: "insideBottomLeft",
+                  }}
+                />
+
+                <ReferenceLine
+                  y={0.1}
+                  stroke="var(--waiting)"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: "주의 요망 (0.10)",
+                    fill: "var(--waiting)",
+                    fontSize: 10,
+                    position: "insideTopLeft",
                   }}
                 />
 
@@ -259,7 +283,7 @@ export default function DataHistory() {
                   label={{
                     value: "위험 임계점 (0.20)",
                     fill: "var(--error)",
-                    fontSize: 11,
+                    fontSize: 10,
                     position: "insideTopLeft",
                   }}
                 />
@@ -267,27 +291,40 @@ export default function DataHistory() {
                 {selectedDevice ? (
                   <Line
                     type="monotone"
-                    dataKey="vibration"
-                    name="진동 수치(mm/s)"
-                    stroke="var(--waiting)"
+                    dataKey="average" // 선택된 경우에도 평균값(단일 모터값) 활용
+                    name="현재 진동 수치(mm/s)"
+                    stroke="var(--font)" // 단일 조회 시 색상 통일
                     strokeWidth={3}
                     dot={{ r: 3 }}
                     activeDot={{ r: 6 }}
                   />
                 ) : (
-                  deviceList.map((id, index) => (
+                  <>
                     <Line
-                      key={id}
                       type="monotone"
-                      dataKey={id}
-                      name={id}
-                      stroke={CHART_COLORS[index % CHART_COLORS.length]}
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 5 }}
-                      hide={hiddenLines[id]} // 상태에 따라 숨김 처리
+                      dataKey="average"
+                      name="전체 평균"
+                      stroke="var(--font)"
+                      strokeWidth={1}
+                      strokeDasharray="5 5"
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 6 }}
+                      hide={hiddenLines["average"]}
                     />
-                  ))
+                    {deviceList.map((id, index) => (
+                      <Line
+                        key={id}
+                        type="monotone"
+                        dataKey={id}
+                        name={id}
+                        stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 5 }}
+                        hide={hiddenLines[id]}
+                      />
+                    ))}
+                  </>
                 )}
               </ComposedChart>
             </ResponsiveContainer>
@@ -371,11 +408,28 @@ export default function DataHistory() {
                 <Th>장비 ID</Th>
                 <Th>측정 날짜</Th>
                 <Th>측정 시간</Th>
-                <Th>정상 패턴</Th>
-                <Th>진동 수치</Th>
-                <Th>위험 임계점</Th>
+
+                <Th style={{ color: "var(--main)" }}>
+                  정상 패턴
+                  <br />
+                  (mm/s)
+                </Th>
+                <Th style={{ color: "var(--waiting)" }}>
+                  주의 임계점
+                  <br />
+                  (mm/s)
+                </Th>
+                <Th style={{ color: "var(--error)" }}>
+                  위험 임계점 <br />
+                  (mm/s)
+                </Th>
+                <Th style={{ color: "var(--font)" }}>
+                  진동 측정값
+                  <br />
+                  (mm/s)
+                </Th>
                 <Th>고장 확률</Th>
-                <Th>AI 상태</Th>
+                <Th>AI 판정</Th>
               </tr>
             </thead>
             <tbody>
@@ -387,14 +441,20 @@ export default function DataHistory() {
                     <Td>{motor.date}</Td>
                     <Td>{motor.time}</Td>
                     <Td style={{ color: "var(--main)", fontWeight: 700 }}>
-                      0.02 mm/s
+                      0.02
                     </Td>
-                    <VibCell $isHigh={motor.vibration >= 0.1}>
-                      {motor.vibration} mm/s
-                    </VibCell>
+                    <Td style={{ color: "var(--waiting)", fontWeight: 700 }}>
+                      0.10
+                    </Td>
                     <Td style={{ color: "var(--error)", fontWeight: 700 }}>
-                      0.20 mm/s
+                      0.20
                     </Td>
+                    <VibCell
+                      $isHigh={motor.vibration >= 0.1}
+                      style={{ fontWeight: 700 }}
+                    >
+                      {motor.vibration}
+                    </VibCell>
                     <Td>
                       <ProbContainer>
                         <BarBg>
@@ -658,7 +718,7 @@ const StyledTable = styled.table`
   border-collapse: collapse;
 `;
 const Th = styled.th`
-  text-align: left;
+  text-align: center;
   padding: 15px;
   background: var(--background2);
   font-size: 12px;
@@ -669,13 +729,14 @@ const Th = styled.th`
   border-bottom: 2px solid var(--border);
 `;
 const Td = styled.td`
+  text-align: center;
   padding: 15px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 `;
 const IdCell = styled(Td)`
   font-weight: 700;
-  color: var(--main);
+  color: var(--font);
 `;
 const VibCell = styled(Td)`
   color: ${(props) => (props.$isHigh ? "var(--error)" : "var(--font)")};

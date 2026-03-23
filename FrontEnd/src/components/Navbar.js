@@ -17,7 +17,7 @@ const Navbar = () => {
           대시보드
         </MenuItem>
         <MenuItem to="/history" $isActive={path === "/history"}>
-          데이터 예측 및 이력
+          데이터 로그
         </MenuItem>
         <MenuItem to="/analysis" $isActive={path === "/analysis"}>
           Analysis
