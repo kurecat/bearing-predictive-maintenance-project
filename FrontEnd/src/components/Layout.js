@@ -1,28 +1,61 @@
-import React, { useState, createContext } from "react";
+import React, { useState, createContext, useEffect } from "react";
 import Navbar from "./Navbar";
 import Topbar from "./Topbar";
 import styled from "styled-components";
+import SocketQueue from "../api/SocketQueue"; // 소켓 유틸 불러오기
 
-// 컨텍스트 생성
 export const NotificationContext = createContext();
 
 const Layout = ({ children, toggleTheme }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [globalNotifications, setGlobalNotifications] = useState([]);
-
-  // 실시간 센서 데이터 이력 상태
   const [sensorHistory, setSensorHistory] = useState([]);
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
+  const socketQueue = new SocketQueue("ws://localhost:8000/socket/devices");
 
-  // 알림 추가 함수
+  useEffect(() => {
+    socketQueue.connect();
+
+    socketQueue.onMessage(() => {
+      const rawMessage = socketQueue.getMessage();
+      if (!rawMessage) return;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(rawMessage);
+      } catch (e) {
+        console.error("Invalid message format:", rawMessage);
+        return;
+      }
+      const device = parsed?.payload?.device;
+      const metadata = parsed?.payload?.metadata;
+      const rms = parsed?.payload?.rms;
+      if (!metadata) return;
+
+      const now = new Date();
+      const dateString = now.toISOString().split("T")[0];
+      const timeString = now.toLocaleTimeString();
+
+      // === 전역 센서 기록 추가 ===
+      addSensorRecord({
+        id: metadata.device_ref,
+        name: device?.alias ?? device.motor_spec.model,   // 노드에서 쓰는 name 포함
+        vibration: rms?.[0] ? parseFloat(rms[0].toFixed(3)) : metadata.vibration ?? 0.0,
+        prob: metadata.prob ? parseFloat(metadata.prob.toFixed(2)) : 0,
+        label: (metadata.prob ?? 0) >= 80 ? 1 : 0,
+        date: dateString,
+        time: timeString,
+        filename: metadata.filename,                  // 노드에서 쓰는 filename 포함
+      });
+    });
+  }, []);
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
   const addNotification = (newAlert) => {
     setGlobalNotifications((prev) => [{ ...newAlert, isRead: false }, ...prev]);
   };
 
-  // 알림 읽음 처리 함수
   const markAsRead = () => {
     setGlobalNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
@@ -43,7 +76,6 @@ const Layout = ({ children, toggleTheme }) => {
     >
       <Container>
         {isSidebarOpen && <Navbar />}
-
         <MainWrapper>
           <Topbar toggleSidebar={toggleSidebar} toggleTheme={toggleTheme} />
           <ContentArea>{children}</ContentArea>
