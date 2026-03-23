@@ -169,7 +169,7 @@ export default function Dashboard() {
                     fill: "var(--font2)",
                     fontWeight: "var(--bold)",
                   }}
-                  width={50}
+                  width={90}
                 />
                 <Tooltip cursor={{ fill: "var(--background2)" }} />
                 <Bar
@@ -205,7 +205,7 @@ export default function Dashboard() {
           return (
             <RealTimeCard key={node.id}>
               <CardLeft>
-                <MachineName>{node.id}</MachineName>
+                <MachineName>{node.name}</MachineName>
                 <BigNumber>
                   {node.prob}
                   <UnitSpan>%</UnitSpan>
@@ -365,6 +365,7 @@ const CardLeft = styled.div`
   flex-direction: column;
   justify-content: space-between;
   min-width: 70px;
+  max-width: 120px;
 `;
 const MachineName = styled.div`
   font-size: 12px;
