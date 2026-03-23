@@ -11,9 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import {
-  NotificationContext
-} from "../components/Layout";
+import { NotificationContext } from "../components/Layout";
 
 const CHART_COLORS = [
   "#ef4444",
@@ -42,7 +40,7 @@ export default function DataHistory() {
 
   const filteredHistory = useMemo(() => {
     return sensorHistory.filter((item) => {
-      const matchDevice = selectedDevice === "" || item.id === selectedDevice;
+      const matchDevice = selectedDevice === "" || item.name === selectedDevice;
       const itemDate = item.date;
       const matchDate =
         (!startDate || itemDate >= startDate) &&
@@ -63,8 +61,8 @@ export default function DataHistory() {
   }, [selectedDevice, startDate, endDate]);
 
   const deviceList = useMemo(() => {
-    const ids = sensorHistory.map((item) => item.id);
-    return [...new Set(ids)].sort();
+    const names = sensorHistory.map((item) => item.name);
+    return [...new Set(names)].sort();
   }, [sensorHistory]);
 
   // 필터 조건이 바뀌면 숨겨진 선 상태를 초기화
@@ -72,8 +70,8 @@ export default function DataHistory() {
     if (!selectedDevice) {
       // 전체 장비 조회 시: 평균선은 보이고, 개별 모터 선은 모두 숨김
       const initialHidden = {};
-      deviceList.forEach((id) => {
-        initialHidden[id] = true;
+      deviceList.forEach((name) => {
+        initialHidden[name] = true;
       });
       initialHidden["average"] = false;
       setHiddenLines(initialHidden);
@@ -117,12 +115,12 @@ export default function DataHistory() {
       }
 
       // 개별 모터별 누적
-      if (!grouped[minuteTime][item.id]) {
-        grouped[minuteTime][item.id] = 0;
-        grouped[minuteTime].count[item.id] = 0;
+      if (!grouped[minuteTime][item.name]) {
+        grouped[minuteTime][item.name] = 0;
+        grouped[minuteTime].count[item.name] = 0;
       }
-      grouped[minuteTime][item.id] += item.vibration;
-      grouped[minuteTime].count[item.id] += 1;
+      grouped[minuteTime][item.name] += item.vibration;
+      grouped[minuteTime].count[item.name] += 1;
 
       // 전체 모터 누적 (평균선 계산용)
       grouped[minuteTime].totalVibration += item.vibration;
@@ -137,9 +135,11 @@ export default function DataHistory() {
       );
 
       // 개별 모터 평균 계산
-      deviceList.forEach((id) => {
-        if (group[id] !== undefined) {
-          result[id] = parseFloat((group[id] / group.count[id]).toFixed(3));
+      deviceList.forEach((name) => {
+        if (group[name] !== undefined) {
+          result[name] = parseFloat(
+            (group[name] / group.count[name]).toFixed(3),
+          );
         }
       });
       return result;
@@ -313,17 +313,17 @@ export default function DataHistory() {
                       activeDot={{ r: 6 }}
                       hide={hiddenLines["average"]}
                     />
-                    {deviceList.map((id, index) => (
+                    {deviceList.map((name, index) => (
                       <Line
-                        key={id}
+                        key={name}
                         type="monotone"
-                        dataKey={id}
-                        name={id}
+                        dataKey={name}
+                        name={name}
                         stroke={CHART_COLORS[index % CHART_COLORS.length]}
                         strokeWidth={2}
                         dot={false}
                         activeDot={{ r: 5 }}
-                        hide={hiddenLines[id]}
+                        hide={hiddenLines[name]}
                       />
                     ))}
                   </>
@@ -344,8 +344,8 @@ export default function DataHistory() {
                     {log.date} {log.time}
                   </LogTime>
                   <LogText>
-                    <span style={{ fontWeight: 700 }}>{log.id}</span>: 진동 이상
-                    ({log.prob}%)
+                    <span style={{ fontWeight: 700 }}>{log.name}</span>: 진동
+                    이상 ({log.prob}%)
                   </LogText>
                 </LogBox>
               ))}
@@ -369,9 +369,9 @@ export default function DataHistory() {
                 onChange={(e) => setSelectedDevice(e.target.value)}
               >
                 <option value="">전체 모터</option>
-                {deviceList.map((id) => (
-                  <option key={id} value={id}>
-                    {id}
+                {deviceList.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
                   </option>
                 ))}
               </FilterSelect>
@@ -407,7 +407,7 @@ export default function DataHistory() {
           <StyledTable>
             <thead>
               <tr>
-                <Th>장비 ID</Th>
+                <Th>장비명</Th>
                 <Th>측정 날짜</Th>
                 <Th>측정 시간</Th>
 
@@ -439,7 +439,7 @@ export default function DataHistory() {
                 const status = getStatusInfo(motor.prob);
                 return (
                   <tr key={index}>
-                    <IdCell>{motor.id}</IdCell>
+                    <IdCell>{motor.name}</IdCell>
                     <Td>{motor.date}</Td>
                     <Td>{motor.time}</Td>
                     <Td style={{ color: "var(--main)", fontWeight: 700 }}>
@@ -820,6 +820,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-    props.$active ? "var(--main)" : "var(--background2)"};
+      props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;
