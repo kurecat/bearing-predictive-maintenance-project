@@ -1,7 +1,6 @@
 import React, { useState, useContext, useMemo, useEffect } from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import {
-  Area,
   Line,
   ComposedChart,
   XAxis,
@@ -14,6 +13,19 @@ import {
 } from "recharts";
 import { NotificationContext } from "../components/Layout";
 
+// 9개 모터의 그래프 선 색상
+const CHART_COLORS = [
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#84cc16",
+  "#10b981",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+];
+
 export default function DataHistory() {
   const { sensorHistory = [] } = useContext(NotificationContext);
 
@@ -24,6 +36,9 @@ export default function DataHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
   const pagesPerBlock = 10;
+
+  // 그래프 선을 숨기거나 켤 때 사용할 상태 (모터 ID를 저장)
+  const [hiddenLines, setHiddenLines] = useState({});
 
   const filteredHistory = useMemo(() => {
     return sensorHistory.filter((item) => {
@@ -47,6 +62,11 @@ export default function DataHistory() {
     setCurrentPage(1);
   }, [selectedDevice, startDate, endDate]);
 
+  // 필터 조건이 바뀌면 숨겨진 선 상태를 초기화
+  useEffect(() => {
+    setHiddenLines({});
+  }, [selectedDevice]);
+
   const currentBlock = Math.ceil(currentPage / pagesPerBlock);
   const startPage = (currentBlock - 1) * pagesPerBlock + 1;
   const endPage = Math.min(startPage + pagesPerBlock - 1, totalPages);
@@ -63,17 +83,71 @@ export default function DataHistory() {
   ).length;
   const successCount = filteredHistory.filter((m) => m.prob < 30).length;
 
-  const chartData = [...filteredHistory].slice(0, 20).reverse();
-
   const deviceList = useMemo(() => {
     const ids = sensorHistory.map((item) => item.id);
     return [...new Set(ids)].sort();
   }, [sensorHistory]);
 
+  const chartData = useMemo(() => {
+    const grouped = {};
+
+    filteredHistory.forEach((item) => {
+      const timeParts = item.time.split(":");
+      const minuteTime =
+        timeParts.length >= 2 ? `${timeParts[0]}:${timeParts[1]}` : item.time;
+
+      if (!grouped[minuteTime]) {
+        grouped[minuteTime] = { time: minuteTime, count: {} };
+      }
+
+      if (selectedDevice) {
+        if (!grouped[minuteTime].vibration) {
+          grouped[minuteTime].vibration = 0;
+          grouped[minuteTime].count.total = 0;
+        }
+        grouped[minuteTime].vibration += item.vibration;
+        grouped[minuteTime].count.total += 1;
+      } else {
+        if (!grouped[minuteTime][item.id]) {
+          grouped[minuteTime][item.id] = 0;
+          grouped[minuteTime].count[item.id] = 0;
+        }
+        grouped[minuteTime][item.id] += item.vibration;
+        grouped[minuteTime].count[item.id] += 1;
+      }
+    });
+
+    const averagedData = Object.values(grouped).map((group) => {
+      const result = { time: group.time };
+      if (selectedDevice) {
+        result.vibration = parseFloat(
+          (group.vibration / group.count.total).toFixed(3),
+        );
+      } else {
+        deviceList.forEach((id) => {
+          if (group[id] !== undefined) {
+            result[id] = parseFloat((group[id] / group.count[id]).toFixed(3));
+          }
+        });
+      }
+      return result;
+    });
+
+    return averagedData.slice(-20);
+  }, [filteredHistory, selectedDevice, deviceList]);
+
   const getStatusInfo = (prob) => {
     if (prob >= 70) return { text: "위험", type: "danger" };
     if (prob >= 30) return { text: "주의", type: "warning" };
     return { text: "정상", type: "success" };
+  };
+
+  // 범례 클릭 시 선 보이기/숨기기 토글 함수
+  const handleLegendClick = (e) => {
+    setHiddenLines((prev) => ({
+      ...prev,
+      [e.dataKey]: !prev[e.dataKey], // 기존 상태를 반전시킴 (true -> false, false -> true)
+    }));
   };
 
   return (
@@ -116,21 +190,15 @@ export default function DataHistory() {
         <ChartSection>
           <SectionTitle>
             {selectedDevice
-              ? `${selectedDevice} 데이터 추이`
-              : "최근 수집 장비 추이 분석"}
+              ? `${selectedDevice} 진동 데이터 추이 (분 단위 평균)`
+              : "전체 장비 진동 추이 분석 (분 단위 평균)"}
           </SectionTitle>
           <ChartWrapper>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={chartData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                margin={{ top: 20, right: 20, left: -20, bottom: 0 }}
               >
-                <defs>
-                  <linearGradient id="colorCurrent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
@@ -140,11 +208,9 @@ export default function DataHistory() {
                   dataKey="time"
                   tick={{ fontSize: 10, fill: "var(--font2)" }}
                 />
-                <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
                 <YAxis
-                  yAxisId="right"
-                  orientation="right"
                   tick={{ fontSize: 11 }}
+                  domain={[0, (dataMax) => Math.max(dataMax, 0.25)]}
                 />
                 <Tooltip
                   contentStyle={{
@@ -152,44 +218,82 @@ export default function DataHistory() {
                     border: "none",
                     boxShadow: "var(--shadow)",
                   }}
-                  labelFormatter={(value) => `측정 시간: ${value}`}
+                  labelFormatter={(value) => `측정 시간: ${value} (평균)`}
                 />
-                <Legend iconType="circle" />
+                <Legend
+                  iconType="circle"
+                  wrapperStyle={{
+                    fontSize: "12px",
+                    paddingTop: "10px",
+                    cursor: "pointer",
+                  }}
+                  onClick={handleLegendClick} // 클릭 이벤트 추가
+                  formatter={(value) => (
+                    // 클릭하여 숨긴 상태면 범례 글씨 색을 흐리게 처리
+                    <span
+                      style={{
+                        color: hiddenLines[value] ? "#cbd5e1" : "var(--font2)",
+                      }}
+                    >
+                      {value}
+                    </span>
+                  )}
+                />
+
                 <ReferenceLine
-                  yAxisId="right"
-                  y={0.1}
-                  stroke="var(--error)"
-                  strokeDasharray="5 5"
+                  y={0.02}
+                  stroke="var(--main)"
+                  strokeDasharray="4 4"
                   label={{
-                    value: "임계치",
-                    fill: "var(--error)",
-                    fontSize: 10,
+                    value: "정상 패턴 (0.02)",
+                    fill: "var(--main)",
+                    fontSize: 11,
+                    position: "insideBottomLeft",
                   }}
                 />
 
-                <Area
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="current"
-                  name="전류(A)"
-                  fill="url(#colorCurrent)"
-                  stroke="var(--main)"
-                  strokeWidth={2}
+                <ReferenceLine
+                  y={0.2}
+                  stroke="var(--error)"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: "위험 임계점 (0.20)",
+                    fill: "var(--error)",
+                    fontSize: 11,
+                    position: "insideTopLeft",
+                  }}
                 />
 
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="vibration"
-                  name="진동"
-                  stroke="var(--waiting)"
-                  strokeWidth={2}
-                  dot={false}
-                />
+                {selectedDevice ? (
+                  <Line
+                    type="monotone"
+                    dataKey="vibration"
+                    name="진동 수치(mm/s)"
+                    stroke="var(--waiting)"
+                    strokeWidth={3}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 6 }}
+                  />
+                ) : (
+                  deviceList.map((id, index) => (
+                    <Line
+                      key={id}
+                      type="monotone"
+                      dataKey={id}
+                      name={id}
+                      stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 5 }}
+                      hide={hiddenLines[id]} // 상태에 따라 숨김 처리
+                    />
+                  ))
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </ChartWrapper>
         </ChartSection>
+
         <LogSection>
           <SectionTitle>위험 감지 타임라인</SectionTitle>
           <LogContainer>
@@ -201,7 +305,8 @@ export default function DataHistory() {
                     {log.date} {log.time}
                   </LogTime>
                   <LogText>
-                    <strong>{log.id}</strong>: 진동 이상 ({log.prob}%)
+                    <span style={{ fontWeight: 700 }}>{log.id}</span>: 진동 이상
+                    ({log.prob}%)
                   </LogText>
                 </LogBox>
               ))}
@@ -266,8 +371,9 @@ export default function DataHistory() {
                 <Th>장비 ID</Th>
                 <Th>측정 날짜</Th>
                 <Th>측정 시간</Th>
+                <Th>정상 패턴</Th>
                 <Th>진동 수치</Th>
-                <Th>전류 수치</Th>
+                <Th>위험 임계점</Th>
                 <Th>고장 확률</Th>
                 <Th>AI 상태</Th>
               </tr>
@@ -280,10 +386,15 @@ export default function DataHistory() {
                     <IdCell>{motor.id}</IdCell>
                     <Td>{motor.date}</Td>
                     <Td>{motor.time}</Td>
+                    <Td style={{ color: "var(--main)", fontWeight: 700 }}>
+                      0.02 mm/s
+                    </Td>
                     <VibCell $isHigh={motor.vibration >= 0.1}>
                       {motor.vibration} mm/s
                     </VibCell>
-                    <Td>{motor.current} A</Td>
+                    <Td style={{ color: "var(--error)", fontWeight: 700 }}>
+                      0.20 mm/s
+                    </Td>
                     <Td>
                       <ProbContainer>
                         <BarBg>

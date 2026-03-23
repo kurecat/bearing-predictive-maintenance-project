@@ -28,7 +28,7 @@ const GlobalStyle = createGlobalStyle`
   }
   :root {
     /* 색상 정의 */
-    --main : #2C3BA1;
+    --main : #2875C5 ;
     --main2 : #c8cce6;
     --background : #FFFFFF;
     --background2 : #f8fafc;
@@ -38,7 +38,7 @@ const GlobalStyle = createGlobalStyle`
     --font3 : #ffffff;
     --run : #009B57; 
     --waiting : #F76C0F; 
-    --error : #EF4444; 
+    --error : #D62828 ; 
     --bgRun : #e9f3ee;
     --bgWaiting : #FEF6E7;
     --bgError : #FEEDED;
