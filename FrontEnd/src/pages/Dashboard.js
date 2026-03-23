@@ -108,30 +108,67 @@ export default function Dashboard() {
   // }, [addSensorRecord]);
 
   useEffect(() => {
-  if (!sensorHistory || sensorHistory.length === 0) return;
+    if (!sensorHistory || sensorHistory.length === 0) return;
 
-  // id별로 가장 최근 기록만 추출
-  const latestById = {};
-  for (const record of sensorHistory) {
-    if (!latestById[record.id]) {
-      latestById[record.id] = record;
+    const latestById = {};
+    const orderedNodes = [];
+
+    for (const record of sensorHistory) {
+      if (!latestById[record.id]) {
+        latestById[record.id] = record;
+        orderedNodes.push(record); // 순서 유지
+      }
     }
-  }
 
-  // 최신 기록들을 노드 배열로 변환
-  const initialNodes = Object.values(latestById).map((rec) => ({
-    id: rec.id,
-    name: rec.name,
-    vibration: rec.vibration,
-    prob: rec.prob,
-    date: rec.date,
-    time: rec.time,
-    filename: rec.filename,
-  }));
+    setNodes(
+      orderedNodes.map((rec) => ({
+        id: rec.id,
+        name: rec.name,
+        vibration: rec.vibration,
+        prob: rec.prob,
+        date: rec.date,
+        time: rec.time,
+        filename: rec.filename,
+      }))
+    );
+  }, []);
 
-  setNodes(initialNodes);
-}, [sensorHistory]);
+  useEffect(() => {
+    if (!sensorHistory || sensorHistory.length === 0) return;
 
+    const latest = sensorHistory[0]; // 가장 최근 기록만 반영
+    setNodes((prevNodes) => {
+      const exists = prevNodes.some((node) => node.id === latest.id);
+
+      if (exists) {
+        return prevNodes.map((node) =>
+          node.id === latest.id
+            ? {
+              ...node,
+              vibration: latest.vibration,
+              prob: latest.prob,
+              date: latest.date,
+              time: latest.time,
+              filename: latest.filename,
+            }
+            : node
+        );
+      } else {
+        return [
+          ...prevNodes,
+          {
+            id: latest.id,
+            name: latest.name,
+            vibration: latest.vibration,
+            prob: latest.prob,
+            date: latest.date,
+            time: latest.time,
+            filename: latest.filename,
+          },
+        ];
+      }
+    });
+  }, [sensorHistory]);
 
   // 실시간 데이터를 기반으로 Dashboard 통계 동적 계산
   const normalMotors = nodes.filter((n) => n.prob < 30).length;
