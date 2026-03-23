@@ -58,10 +58,10 @@ export default function Dashboard() {
         prevNodes.map((node) => {
           const randV = Math.max(
             0.01,
-            node.vibration + (Math.random() - 0.5) * 0.01,
+            node.vibration + (Math.random() - 0.5) * 0.001,
           );
           const isTarget = node.id === "MTR-105";
-          const finalV = isTarget ? randV + 0.05 : randV;
+          const finalV = isTarget ? randV + 0.0005 : randV;
           const finalProb = Math.min(100, Math.floor((finalV / 0.2) * 100));
 
           const finalC = parseFloat(
@@ -182,8 +182,8 @@ export default function Dashboard() {
               <PieChart>
                 <Pie
                   data={statusData}
-                  innerRadius={50}
-                  outerRadius={70}
+                  innerRadius={30}
+                  outerRadius={50}
                   paddingAngle={2}
                   dataKey="value"
                   stroke="none"
@@ -262,7 +262,7 @@ export default function Dashboard() {
                   name="실시간 위험 확률(%)"
                   fill="var(--main)"
                   radius={[0, 8, 8, 0]}
-                  barSize={15}
+                  barSize={10}
                   isAnimationActive={false}
                   label={{
                     position: "right",
@@ -280,6 +280,7 @@ export default function Dashboard() {
       <ChartTitle style={{ marginTop: "10px" }}>
         개별 모터 실시간 관제
       </ChartTitle>
+
       <RealTimeGridContainer>
         {nodes.map((node) => {
           const isDanger = node.prob >= 70;
@@ -292,18 +293,11 @@ export default function Dashboard() {
           return (
             <RealTimeCard key={node.id}>
               <CardLeft>
-                <MachineName>{node.name}</MachineName>
+                <MachineName>{node.id}</MachineName>
                 <BigNumber>
                   {node.prob.toFixed(1)}
                   <UnitSpan>%</UnitSpan>
                 </BigNumber>
-                <NodeStatusBadge
-                  $status={
-                    isDanger ? "danger" : isWarning ? "warning" : "normal"
-                  }
-                >
-                  {isDanger ? "점검" : isWarning ? "주의" : "가동"}
-                </NodeStatusBadge>
               </CardLeft>
 
               <CardRight>
@@ -320,11 +314,19 @@ export default function Dashboard() {
                 </SegmentedBar>
 
                 <CardStatsGrid>
-                  <StatLabel>장비ID</StatLabel>
-                  <StatValue>{node.id}</StatValue>
-
-                  <StatLabel>수치</StatLabel>
-                  <StatValue>{node.vibration}</StatValue>
+                  <Stats>
+                    <StatLabel>수치</StatLabel>
+                    <StatValue>{node.vibration}</StatValue>
+                  </Stats>
+                  <Stats>
+                    <NodeStatusBadge
+                      $status={
+                        isDanger ? "danger" : isWarning ? "warning" : "normal"
+                      }
+                    >
+                      {isDanger ? "고장" : isWarning ? "위험" : "정상"}
+                    </NodeStatusBadge>
+                  </Stats>
                 </CardStatsGrid>
               </CardRight>
             </RealTimeCard>
@@ -425,10 +427,11 @@ const KpiContainer = styled.div`
 
 const KpiRow = styled.div`
   display: flex;
-  height: 40px;
+  height: 20px;
   align-items: center;
-  padding: 20px 0;
-  gap: 20px;
+  padding: 15px 0;
+  gap: 15px;
+  margin: 0;
   border-bottom: 1px solid var(--border);
   &:last-child {
     border-bottom: none;
@@ -436,8 +439,8 @@ const KpiRow = styled.div`
 `;
 
 const KpiCircle = styled.div`
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   border: 4px solid ${(props) => props.$color || "var(--font)"};
   box-sizing: border-box;
@@ -447,15 +450,16 @@ const KpiTextWrapper = styled.div`
   display: flex;
   gap: 10px;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
   align-items: center;
 `;
 
 const KpiValue = styled.div`
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--font);
   line-height: 1;
+  align-items: center;
 `;
 
 const KpiLabel = styled.div`
@@ -486,7 +490,7 @@ const ChartTitle = styled.h2`
 `;
 
 const ChartWrapper = styled.div`
-  height: 150px;
+  height: 100px;
   width: 100%;
   margin-top: 10px;
   flex-grow: 1;
@@ -526,24 +530,23 @@ const CardLeft = styled.div`
 `;
 
 const MachineName = styled.div`
-  font-size: 14px;
+  font-size: 12px;
   color: var(--font);
   font-weight: 700;
-  margin-bottom: 8px;
 `;
 
 const BigNumber = styled.div`
-  font-size: 26px;
+  font-size: 20px;
   color: var(--font);
   font-weight: 800;
-  margin-bottom: 12px;
+
   display: flex;
   align-items: baseline;
 `;
 
 const UnitSpan = styled.span`
   font-size: 14px;
-  color: var(--font2);
+  color: var(--font);
   font-weight: 500;
   margin-left: 2px;
 `;
@@ -556,7 +559,7 @@ const NodeStatusBadge = styled.div`
         ? "var(--waiting)"
         : "var(--main)"};
   color: white;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   text-align: center;
   padding: 4px 0;
@@ -568,7 +571,6 @@ const CardRight = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
 `;
 
 const SegmentedBar = styled.div`
@@ -592,10 +594,14 @@ const Segment = styled.div`
 
 const CardStatsGrid = styled.div`
   display: flex;
-  justify-content: center;
-  flex-direction: column;
-  gap: 5px;
-  align-items: flex-start;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const Stats = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
 `;
 
 const StatLabel = styled.div`
