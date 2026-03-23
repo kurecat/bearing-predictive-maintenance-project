@@ -17,7 +17,6 @@ import {
   Cell,
 } from "recharts";
 import { NotificationContext } from "../components/Layout";
-import SocketQueue from '../api/SocketQueue.js';
 
 // 9개 모터 초기 상태
 // const initialNodes = Array.from({ length: 9 }, (_, i) => ({
@@ -31,26 +30,26 @@ import SocketQueue from '../api/SocketQueue.js';
 export default function Dashboard() {
   // const [nodes, setNodes] = useState(initialNodes);
   const [nodes, setNodes] = useState([]);
-  const { addNotification, addSensorRecord } = useContext(NotificationContext);
+  // const { addNotification, addSensorRecord } = useContext(NotificationContext);
+  const { sensorHistory } = useContext(NotificationContext);
   const [alerts, setAlerts] = useState([]);
-  const socketQueue = new SocketQueue('ws://localhost:8000/socket/devices');
 
   // 알림 트리거 함수
-  const triggerAlert = (name, prob, status) => {
-    const now = new Date();
-    const time = now.toLocaleTimeString();
-    const date = now.toISOString().split("T")[0];
-    const newAlert = { id: Date.now(), name, prob, time, date, status };
-    setAlerts((prev) => [...prev, newAlert]);
+  // const triggerAlert = (name, prob, status) => {
+  //   const now = new Date();
+  //   const time = now.toLocaleTimeString();
+  //   const date = now.toISOString().split("T")[0];
+  //   const newAlert = { id: Date.now(), name, prob, time, date, status };
+  //   setAlerts((prev) => [...prev, newAlert]);
 
-    if (addNotification) {
-      addNotification({
-        id: newAlert.id,
-        message: `[${status === "danger" ? "고장" : "위험"}] ${name} 고장 확률 ${prob}%`,
-        time: time,
-      });
-    }
-  };
+  //   if (addNotification) {
+  //     addNotification({
+  //       id: newAlert.id,
+  //       message: `[${status === "danger" ? "고장" : "위험"}] ${name} 고장 확률 ${prob}%`,
+  //       time: time,
+  //     });
+  //   }
+  // };
 
   const handleCloseAlerts = () => setAlerts([]);
 
@@ -109,61 +108,30 @@ export default function Dashboard() {
   // }, [addSensorRecord]);
 
   useEffect(() => {
-    socketQueue.connect();
+  if (!sensorHistory || sensorHistory.length === 0) return;
 
-    socketQueue.onMessage(() => {
-      const rawMessage = socketQueue.getMessage();
-      if (!rawMessage) return;
+  // id별로 가장 최근 기록만 추출
+  const latestById = {};
+  for (const record of sensorHistory) {
+    if (!latestById[record.id]) {
+      latestById[record.id] = record;
+    }
+  }
 
-      let parsed;
-      try {
-        parsed = JSON.parse(rawMessage);
-      } catch (e) {
-        console.error("Invalid message format:", rawMessage);
-        return;
-      }
+  // 최신 기록들을 노드 배열로 변환
+  const initialNodes = Object.values(latestById).map((rec) => ({
+    id: rec.id,
+    name: rec.name,
+    vibration: rec.vibration,
+    prob: rec.prob,
+    date: rec.date,
+    time: rec.time,
+    filename: rec.filename,
+  }));
 
-      const device = parsed?.payload?.device;
-      const metadata = parsed?.payload?.metadata;
-      const rms = parsed?.payload?.rms;
-      if (!metadata) return;
+  setNodes(initialNodes);
+}, [sensorHistory]);
 
-      console.log("Received from WebSocket:", parsed);
-
-      setNodes((prevNodes) => {
-        const exists = prevNodes.some((node) => node.id === metadata.device_ref);
-
-        if (exists) {
-          console.log("Updating existing node:", metadata.device_ref);
-          return prevNodes.map((node) =>
-            node.id === metadata.device_ref
-              ? {
-                ...node,
-                name: device?.alias ?? node.name,           // name은 device.alias
-                vibration: (rms?.[0] * 1000).toFixed(3) ?? node.vibration,
-                prob: metadata.prob ?? node.prob,
-                date: metadata.date,
-                filename: metadata.filename,
-              }
-              : node
-          );
-        } else {
-          console.log("Adding new node:", metadata.device_ref);
-          return [
-            ...prevNodes,
-            {
-              id: metadata.device_ref,
-              name: device?.alias ?? "",
-              vibration: metadata.vibration ?? 0.0,
-              prob: metadata.prob ?? 0,
-              date: metadata.date,
-              filename: metadata.filename,
-            },
-          ];
-        }
-      });
-    });
-  }, []);
 
   // 실시간 데이터를 기반으로 Dashboard 통계 동적 계산
   const normalMotors = nodes.filter((n) => n.prob < 30).length;
@@ -353,12 +321,10 @@ export default function Dashboard() {
             <RealTimeCard key={node.id}>
               <CardLeft>
                 <MachineName>{node.name}</MachineName>
-                {node.prob && (
-                  <BigNumber>
-                    {node.prob.toFixed(1)}
-                    <UnitSpan>%</UnitSpan>
-                  </BigNumber>
-                )}
+                <BigNumber>
+                  {node.prob}
+                  <UnitSpan>%</UnitSpan>
+                </BigNumber>
                 <NodeStatusBadge
                   $status={
                     isDanger ? "danger" : isWarning ? "warning" : "normal"

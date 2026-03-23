@@ -11,7 +11,9 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { NotificationContext } from "../components/Layout";
+import {
+  NotificationContext
+} from "../components/Layout";
 
 const CHART_COLORS = [
   "#ef4444",
@@ -818,6 +820,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-      props.$active ? "var(--main)" : "var(--background2)"};
+    props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;
