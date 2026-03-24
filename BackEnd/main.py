@@ -7,6 +7,7 @@ from bson import ObjectId
 from pymongo import MongoClient
 import uvicorn
 from predictor import predict
+from datetime import datetime
 
 # === MongoDB 연결 ===
 client = MongoClient("mongodb://localhost:27017")
@@ -191,7 +192,7 @@ async def upload_vibration(data: UploadData):
 
     meta_result = vibration_metadata_col.insert_one({
         "device_ref": device_ref,
-        "date": data.Date,
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "filename": data.Filename,
         "data_label": data.DataLabel,
         "label_no": data.LabelNo,

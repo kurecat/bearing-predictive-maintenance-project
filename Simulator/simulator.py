@@ -4,12 +4,11 @@ import threading
 import csvToJsonPost
 
 def collect_normal_dirs(root_path):
-    """'정상' 포함된 경로만 수집"""
     normal_dirs = []
     for dirpath, dirnames, filenames in os.walk(root_path):
         if not filenames:
             continue
-        if "정상" in dirpath:
+        if "정상" in dirpath and "vibration" in dirpath:
             normal_dirs.append((dirpath, sorted(filenames)))
     return normal_dirs
 
@@ -41,7 +40,7 @@ def folder_worker(dirpath, filenames, interval=5):
         time.sleep(interval)  # 파일 간 대기
         idx = (idx + 1) % len(filenames)  # 마지막까지 가면 다시 첫 파일로
 
-root = "e:/data_vibration"
+root = "e:/data"
 normal_dirs = collect_normal_dirs(root)
 
 # 폴더별로 독립 스레드 실행

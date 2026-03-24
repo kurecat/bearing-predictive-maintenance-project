@@ -251,10 +251,12 @@ export default function DataHistory() {
                 <XAxis
                   dataKey="time"
                   tick={{ fontSize: 10, fill: "var(--font2)" }}
+                  domain={["auto","auto"]}
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  domain={[0, (dataMax) => Math.max(dataMax, 0.25)]}
+                  domain={["auto","auto"]}
+                  // {[0, (dataMax) => Math.max(dataMax, 0.25)]}
                 />
                 <Tooltip
                   contentStyle={{
@@ -286,7 +288,7 @@ export default function DataHistory() {
                   )}
                 />
 
-                <ReferenceLine
+                {/* <ReferenceLine
                   y={0.02}
                   stroke="var(--main)"
                   strokeDasharray="4 4"
@@ -320,7 +322,7 @@ export default function DataHistory() {
                     fontSize: 10,
                     position: "insideTopLeft",
                   }}
-                />
+                /> */}
 
                 {selectedDevice ? (
                   <Line
