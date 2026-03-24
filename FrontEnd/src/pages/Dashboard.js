@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import styled, { keyframes } from "styled-components";
 import {
   ComposedChart,
@@ -18,6 +18,36 @@ export default function Dashboard() {
   const [nodes, setNodes] = useState([]);
   const { sensorHistory } = useContext(NotificationContext);
   const [alerts, setAlerts] = useState([]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const firstPageItems = 12;
+  const itemsPerPage = 21;
+  const pagesPerBlock = 10;
+
+  const totalPages = Math.ceil(
+    nodes.length <= firstPageItems
+      ? 1
+      : 1 + Math.ceil((nodes.length - firstPageItems) / itemsPerPage)
+  );
+
+  const currentItems = useMemo(() => {
+    if (currentPage === 1) {
+      return nodes.slice(0, firstPageItems);
+    } else {
+      const startIndex = firstPageItems + (currentPage - 2) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      return nodes.slice(startIndex, endIndex);
+    }
+  }, [nodes, currentPage]);
+
+  const currentBlock = Math.ceil(currentPage / pagesPerBlock);
+  const startPage = (currentBlock - 1) * pagesPerBlock + 1;
+  const endPage = Math.min(startPage + pagesPerBlock - 1, totalPages);
+
+  const pageNumbers = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pageNumbers.push(i);
+  }
 
   const handleCloseAlerts = () => setAlerts([]);
 
@@ -70,137 +100,141 @@ export default function Dashboard() {
 
   return (
     <PageContainer>
-      <HeaderContainer>
-        <div>
-          <PageTitle>종합 통계 대시보드</PageTitle>
-          <PageSubtitle>
-            실시간 설비 가동 현황 및 AI 예측 통계 요약
-          </PageSubtitle>
-        </div>
-      </HeaderContainer>
+      {currentPage === 1 && (
+        <>
+          <HeaderContainer>
+            <div>
+              <PageTitle>종합 통계 대시보드</PageTitle>
+              <PageSubtitle>
+                실시간 설비 가동 현황 및 AI 예측 통계 요약
+              </PageSubtitle>
+            </div>
+          </HeaderContainer>
 
-      <TopGrid>
-        <KpiContainer>
-          <ChartTitle>전체 모터 상태</ChartTitle>
-          <KpiRow>
-            <KpiCircle $color="var(--font)" />
-            <KpiTextWrapper>
-              전체 <KpiValue>{totalMotors}대</KpiValue>
-            </KpiTextWrapper>
-          </KpiRow>
-          <KpiRow>
-            <KpiCircle $color="var(--main)" />
-            <KpiTextWrapper>
-              정상{" "}
-              <KpiValue style={{ color: "var(--main)" }}>
-                {normalMotors}대
-              </KpiValue>
-            </KpiTextWrapper>
-          </KpiRow>
-          <KpiRow>
-            <KpiCircle $color="var(--waiting)" />
-            <KpiTextWrapper>
-              위험{" "}
-              <KpiValue style={{ color: "var(--waiting)" }}>
-                {warningMotors}대
-              </KpiValue>
-            </KpiTextWrapper>
-          </KpiRow>
-          <KpiRow>
-            <KpiCircle $color="var(--error)" />
-            <KpiTextWrapper>
-              고장{" "}
-              <KpiValue style={{ color: "var(--error)" }}>
-                {dangerMotors}대
-              </KpiValue>
-            </KpiTextWrapper>
-          </KpiRow>
-        </KpiContainer>
+          <TopGrid>
+            <KpiContainer>
+              <ChartTitle>전체 모터 상태</ChartTitle>
+              <KpiRow>
+                <KpiCircle $color="var(--font)" />
+                <KpiTextWrapper>
+                  전체 <KpiValue>{totalMotors}대</KpiValue>
+                </KpiTextWrapper>
+              </KpiRow>
+              <KpiRow>
+                <KpiCircle $color="var(--main)" />
+                <KpiTextWrapper>
+                  정상{" "}
+                  <KpiValue style={{ color: "var(--main)" }}>
+                    {normalMotors}대
+                  </KpiValue>
+                </KpiTextWrapper>
+              </KpiRow>
+              <KpiRow>
+                <KpiCircle $color="var(--waiting)" />
+                <KpiTextWrapper>
+                  위험{" "}
+                  <KpiValue style={{ color: "var(--waiting)" }}>
+                    {warningMotors}대
+                  </KpiValue>
+                </KpiTextWrapper>
+              </KpiRow>
+              <KpiRow>
+                <KpiCircle $color="var(--error)" />
+                <KpiTextWrapper>
+                  고장{" "}
+                  <KpiValue style={{ color: "var(--error)" }}>
+                    {dangerMotors}대
+                  </KpiValue>
+                </KpiTextWrapper>
+              </KpiRow>
+            </KpiContainer>
 
-        <ChartCard $flex={1}>
-          <ChartTitle>전체 모터 상태 비율</ChartTitle>
-          <ChartWrapper>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  innerRadius={30}
-                  outerRadius={50}
-                  paddingAngle={2}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--background)",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border)",
-                    fontSize: "13px",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartWrapper>
-        </ChartCard>
+            <ChartCard $flex={1}>
+              <ChartTitle>전체 모터 상태 비율</ChartTitle>
+              <ChartWrapper>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      innerRadius={30}
+                      outerRadius={50}
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--background)",
+                        borderRadius: "8px",
+                        border: "1px solid var(--border)",
+                        fontSize: "13px",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+            </ChartCard>
 
-        <ChartCard $flex={2}>
-          <ChartTitle>고위험 모터 TOP 5 (실시간 위험도순)</ChartTitle>
-          <ChartWrapper>
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                layout="vertical"
-                data={riskData}
-                margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="4 4"
-                  horizontal={false}
-                  stroke="var(--border)"
-                />
-                <XAxis type="number" hide domain={[0, 100]} />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{
-                    fontSize: 12,
-                    fill: "var(--font2)",
-                    fontWeight: "var(--bold)",
-                  }}
-                  width={90}
-                />
-                <Tooltip cursor={{ fill: "var(--background2)" }} />
-                <Bar
-                  dataKey="avgProb"
-                  name="실시간 위험 확률(%)"
-                  fill="var(--main)"
-                  radius={[0, 8, 8, 0]}
-                  barSize={10}
-                  isAnimationActive={false}
-                  label={{
-                    position: "right",
-                    fill: "var(--font2)",
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </ChartWrapper>
-        </ChartCard>
-      </TopGrid>
+            <ChartCard $flex={2}>
+              <ChartTitle>고위험 모터 TOP 5 (실시간 위험도순)</ChartTitle>
+              <ChartWrapper>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    layout="vertical"
+                    data={riskData}
+                    margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="4 4"
+                      horizontal={false}
+                      stroke="var(--border)"
+                    />
+                    <XAxis type="number" hide domain={[0, 100]} />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{
+                        fontSize: 12,
+                        fill: "var(--font2)",
+                        fontWeight: "var(--bold)",
+                      }}
+                      width={90}
+                    />
+                    <Tooltip cursor={{ fill: "var(--background2)" }} />
+                    <Bar
+                      dataKey="avgProb"
+                      name="실시간 위험 확률(%)"
+                      fill="var(--main)"
+                      radius={[0, 8, 8, 0]}
+                      barSize={10}
+                      isAnimationActive={false}
+                      label={{
+                        position: "right",
+                        fill: "var(--font2)",
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </ChartWrapper>
+            </ChartCard>
+          </TopGrid>
+        </>
+      )}
 
       <ChartTitle style={{ marginTop: "10px" }}>
         개별 모터 실시간 관제
       </ChartTitle>
 
       <RealTimeGridContainer>
-        {nodes.map((node) => {
+        {currentItems.map((node) => {
           const isDanger = node.prob >= 70;
           const isWarning = node.prob >= 30 && node.prob < 70;
           const activeSegments = Math.floor(node.prob / 5);
@@ -248,6 +282,47 @@ export default function Dashboard() {
           );
         })}
       </RealTimeGridContainer>
+
+      {totalPages > 1 && (
+        <PaginationContainer>
+          <PageBtn
+            onClick={() => setCurrentPage(Math.max(startPage - 1, 1))}
+            disabled={startPage === 1}
+          >
+            &lt;&lt;
+          </PageBtn>
+          <PageBtn
+            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+          >
+            &lt;
+          </PageBtn>
+          {pageNumbers.map((num) => (
+            <PageNum
+              key={num}
+              $active={currentPage === num}
+              onClick={() => setCurrentPage(num)}
+            >
+              {num}
+            </PageNum>
+          ))}
+          <PageBtn
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+            }
+            disabled={currentPage === totalPages}
+          >
+            &gt;
+          </PageBtn>
+          <PageBtn
+            onClick={() => setCurrentPage(Math.min(endPage + 1, totalPages))}
+            disabled={endPage === totalPages}
+          >
+            &gt;&gt;
+          </PageBtn>
+        </PaginationContainer>
+      )}
+
     </PageContainer>
   );
 }
@@ -342,7 +417,36 @@ const ChartTitle = styled.h2`
   color: var(--font);
   font-weight: 800;
   margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 `;
+
+const ToggleButton = styled.button`
+  margin-left: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--background);
+  color: var(--font);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: var(--main);
+    color: #fff;
+    border-color: var(--main);
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+`;
+
+
 const ChartWrapper = styled.div`
   height: 100px;
   width: 100%;
@@ -443,4 +547,41 @@ const StatValue = styled.div`
   font-size: 12px;
   color: var(--font);
   font-weight: 700;
+`;
+const PaginationContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 25px;
+`;
+const PageBtn = styled.button`
+  padding: 2px 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--font);
+  cursor: pointer;
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+const PageNum = styled.button`
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid
+    ${(props) => (props.$active ? "var(--main)" : "var(--border)")};
+  background: ${(props) =>
+    props.$active ? "var(--main)" : "var(--background)"};
+  color: ${(props) => (props.$active ? "white" : "var(--font)")};
+  font-weight: 700;
+  cursor: pointer;
+  &:hover {
+    background: ${(props) =>
+    props.$active ? "var(--main)" : "var(--background2)"};
+  }
 `;

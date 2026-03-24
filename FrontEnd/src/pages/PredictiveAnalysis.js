@@ -187,12 +187,13 @@ export default function PredictiveAnalysis() {
               <CardHeader>현재 진단 상태</CardHeader>
               <CardBody>
                 {result.summary.status}
+                <div></div>
                 <Probability style={{ color: result.statusColor }}>
                   {" "}
                   (확률 {result.summary.probability}%)
                 </Probability>
               </CardBody>
-              <MetadataText>CSV 파일 라벨: {result.summary.label}</MetadataText>
+              {/* <MetadataText>CSV 파일 라벨: {result.summary.label}</MetadataText> */}
             </ResultCard>
 
             <ResultCard $borderColor="#3b82f6">
@@ -299,7 +300,7 @@ export default function PredictiveAnalysis() {
           </ChartGrid>
 
           {/* 하단: 건전성 추이 및 요인 기여도 */}
-          <ChartGrid>
+          {/* <ChartGrid>
             <ChartCard>
               <ChartTitle>설비 건전성 지수 하락 추이 (Health Score)</ChartTitle>
               <ChartSubtitle>최근 2주간의 AI 종합 점수 변화 이력</ChartSubtitle>
@@ -416,7 +417,7 @@ export default function PredictiveAnalysis() {
                 </ResponsiveContainer>
               </ChartWrapper>
             </ChartCard>
-          </ChartGrid>
+          </ChartGrid> */}
         </ResultSection>
       )}
     </PageContainer>
