@@ -7,7 +7,7 @@ export default function Topbar({ toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { notifications, markAsRead } = useContext(NotificationContext);
+  const { notifications, markAsRead, removeNotification } = useContext(NotificationContext);
 
   const [tabs, setTabs] = useState([
     {
@@ -207,9 +207,9 @@ export default function Topbar({ toggleSidebar }) {
                   <EmptyMsg>알림이 없습니다.</EmptyMsg>
                 ) : (
                   notifications.map((n) => (
-                    <NotificationItem key={n.id}>
+                    <NotificationItem key={n.id} onClick={() => removeNotification(n.id)}>
                       <p>{n.message}</p>
-                      <span>{n.time}</span>
+                      <span>{n.timestamp}</span>
                     </NotificationItem>
                   ))
                 )}
@@ -254,7 +254,7 @@ const IconButton = styled.button`
   transition: all 0.2s ease;
   &:hover {
     background-color: ${(props) =>
-      props.$isDashboard ? "transparent" : "var(--background2)"};
+    props.$isDashboard ? "transparent" : "var(--background2)"};
   }
 `;
 const TabContainer = styled.div`

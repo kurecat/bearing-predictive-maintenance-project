@@ -32,7 +32,7 @@ export default function Dashboard() {
         id: record.id,
         name: record.name,
         vibration: record.vibration,
-        prob: (record.prob * 100).toFixed(0), // 0~1 -> 0~100%
+        prob: record.prob,
         date: record.date,
         time: record.time,
         filename: record.filename,

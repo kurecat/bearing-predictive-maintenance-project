@@ -36,26 +36,49 @@ const Layout = ({ children, toggleTheme }) => {
       const dateString = now.toISOString().split("T")[0];
       const timeString = now.toLocaleTimeString();
 
-      // === 전역 센서 기록 추가 ===
-      addSensorRecord({
+      const record = {
         id: metadata.device_ref,
-        name: device?.alias ?? device.motor_spec.model, // 노드에서 쓰는 name 포함
-        vibration: rms?.[0]
-          ? parseFloat(rms[0].toFixed(3))
-          : (metadata.vibration ?? 0.0),
-        prob: metadata.prob ? parseFloat(metadata.prob.toFixed(2)) : 0,
+        name: device?.alias ?? device.motor_spec.model,
+        vibration: rms?.[0] ? parseFloat(rms[0].toFixed(3)) : (metadata.vibration ?? 0.0),
+        prob: metadata.prob ? parseFloat((metadata.prob * 100).toFixed(0)) : 0,
         label: (metadata.prob ?? 0) >= 80 ? 1 : 0,
         date: dateString,
         time: timeString,
-        filename: metadata.filename, // 노드에서 쓰는 filename 포함
-      });
+        filename: metadata.filename,
+      };
+
+      // === 전역 센서 기록 추가 ===
+      addSensorRecord(record);
+
+      // === 경고 알림 추가 ===
+      if (record.prob >= 70) {
+        addNotification({
+          title: "⚠️ 위험 감지",
+          message: `${record.name} 모터에서 고장 위험 감지 (확률 ${record.prob}%)`,
+          timestamp: `${record.date} ${record.time}`,
+        });
+      } else if (record.prob >= 30) {
+        addNotification({
+          title: "⚠️ 주의 필요",
+          message: `${record.name} 모터에서 이상 징후 감지 (확률 ${record.prob}%)`,
+          timestamp: `${record.date} ${record.time}`,
+        });
+      }
+
     });
   }, []);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const addNotification = (newAlert) => {
-    setGlobalNotifications((prev) => [{ ...newAlert, isRead: false }, ...prev]);
+    setGlobalNotifications((prev) => [
+      { id: prev.length + 1, ...newAlert, isRead: false },
+      ...prev,
+    ]);
+  };
+
+  const removeNotification = (id) => {
+    setGlobalNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const markAsRead = () => {
@@ -75,6 +98,7 @@ const Layout = ({ children, toggleTheme }) => {
         notifications: globalNotifications,
         addNotification,
         markAsRead,
+        removeNotification,
         sensorHistory,
         addSensorRecord,
       }}
