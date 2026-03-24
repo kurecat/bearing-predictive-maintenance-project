@@ -11,6 +11,30 @@ from predictor import predict
 client = MongoClient("mongodb://localhost:27017")
 db = client["bearing_predictive_maintenance"]
 
+# capped collection 생성 (최대 1000개 문서)
+collections = [
+    "devices",
+    "current_rms",
+    "current_samples",
+    "current_metadata",
+    "vibration_rms",
+    "vibration_samples",
+    "vibration_metadata"
+]
+
+for col in collections:
+    # 기존 컬렉션 삭제 (주의: 데이터 사라짐)
+    db.drop_collection(col)
+    # capped collection 생성
+    db.create_collection(
+        col,
+        capped=True,
+        size=5242880,  # 최소 크기 (바이트 단위, 예시로 5MB)
+        max=1000       # 최대 문서 수
+    )
+    print(f"Created capped collection '{col}' with max 1000 documents.")
+
+# 컬렉션 핸들러 준비
 devices_col = db["devices"]
 current_rms_col = db["current_rms"]
 current_samples_col = db["current_samples"]
@@ -19,8 +43,10 @@ vibration_rms_col = db["vibration_rms"]
 vibration_samples_col = db["vibration_samples"]
 vibration_metadata_col = db["vibration_metadata"]
 
+# 연결 관리용 리스트
 active_connections = []
 
+# FastAPI 앱 초기화
 app = FastAPI()
 
 # === 데이터 모델 정의 ===
@@ -183,7 +209,7 @@ async def upload_vibration(data: UploadData):
 
     # === 모델 추론 호출 ===
     probs = predict(data.Samples)
-    prob = max(probs) if probs else None
+    prob = max(probs[1:]) if probs else None
 
     meta_result = vibration_metadata_col.insert_one({
         "device_ref": device_ref,
