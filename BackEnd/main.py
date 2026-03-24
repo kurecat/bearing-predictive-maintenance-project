@@ -1,4 +1,5 @@
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -48,6 +49,19 @@ active_connections = []
 
 # FastAPI 앱 초기화
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,          # 허용할 출처
+    allow_credentials=True,
+    allow_methods=["*"],            # 허용할 HTTP 메서드
+    allow_headers=["*"],            # 허용할 헤더
+)
+
 
 # === 데이터 모델 정의 ===
 class MotorSpec(BaseModel):
@@ -269,12 +283,36 @@ def get_current_samples(device_id: str):
 @app.get("/api/devices/{device_id}/vibration")
 def get_vibration_history(device_id: str):
     history = list(vibration_metadata_col.find({"device_ref": ObjectId(device_id)}))
-    for h in history:
-        h["_id"] = str(h["_id"])
-        h["device_ref"] = str(h["device_ref"])
-        h["rms_id"] = str(h["rms_id"])
-        h["samples_id"] = str(h["samples_id"])
-    return history
+    results = []
+    for meta in history:
+        device = devices_col.find_one({"_id": meta["device_ref"]})
+        rms_doc = vibration_rms_col.find_one({"_id": meta["rms_id"]})
+        rms_values = rms_doc["values"] if rms_doc else []
+
+        results.append({
+            "device": {
+                "_id": str(device["_id"]),
+                "motor_spec": device["motor_spec"],
+                "alias": device.get("alias"),
+            },
+            "metadata": {
+                "_id": str(meta["_id"]),
+                "device_ref": str(meta["device_ref"]),
+                "date": meta["date"],
+                "filename": meta["filename"],
+                "data_label": meta.get("data_label"),
+                "label_no": meta.get("label_no"),
+                "period": meta["period"],
+                "sample_rate": meta["sample_rate"],
+                "data_length": meta["data_length"],
+                "prob": meta["prob"],
+                "probs": meta["probs"],
+                "rms_id": str(meta["rms_id"]),
+                "samples_id": str(meta["samples_id"]),
+            },
+            "rms": rms_values,
+        })
+    return results
 
 # RMS 조회
 @app.get("/api/devices/{device_id}/vibration/rms")

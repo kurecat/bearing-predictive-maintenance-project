@@ -1,5 +1,6 @@
 import React, { useState, useContext, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
+import axiosApi from "../api/axiosApi";
 import {
   Line,
   ComposedChart,
@@ -26,7 +27,7 @@ const CHART_COLORS = [
 ];
 
 export default function DataHistory() {
-  const { sensorHistory = [] } = useContext(NotificationContext);
+  const [sensorHistory, setSensorHistory] = useState([]);
 
   const [selectedDevice, setSelectedDevice] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -56,6 +57,37 @@ export default function DataHistory() {
     return filteredHistory.slice(firstIndex, lastIndex);
   }, [filteredHistory, currentPage]);
 
+  useEffect(() => {
+  const fetchAllDeviceHistories = async () => {
+    try {
+      const devices = await axiosApi.get("/devices");
+      const allHistories = await Promise.all(
+        devices.map(async (device) => {
+          const history = await axiosApi.get(`/devices/${device._id}/vibration`);
+          return history.map((h) => {
+            const historyFormat = {
+              id: h._id,
+              name: h.device.alias ?? h.device.motor_spec.model,
+              date: h.metadata.date.split(" ")[0],
+              time: h.metadata.date.split(" ")[1],
+              vibration: h.rms[0],
+              prob: h.metadata.prob,
+              filename: h.metadata.filename,
+            };
+            return historyFormat;
+          });
+        })
+      );
+      const merged = allHistories.flat();
+      console.log("Fetched device histories:", merged);
+      setSensorHistory(merged);
+    } catch (err) {
+      console.error("Failed to fetch device histories:", err);
+    }
+  };
+
+  fetchAllDeviceHistories();
+}, []);
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDevice, startDate, endDate]);
@@ -820,6 +852,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-      props.$active ? "var(--main)" : "var(--background2)"};
+    props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;

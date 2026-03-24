@@ -2,7 +2,7 @@ import React, { useState, createContext, useEffect } from "react";
 import Navbar from "./Navbar";
 import Topbar from "./Topbar";
 import styled from "styled-components";
-import SocketQueue from "../api/SocketQueue"; // 소켓 유틸 불러오기
+import SocketQueue from "../socket/SocketQueue"; // 소켓 유틸 불러오기
 
 export const NotificationContext = createContext();
 
@@ -63,7 +63,10 @@ const Layout = ({ children, toggleTheme }) => {
   };
 
   const addSensorRecord = (record) => {
-    setSensorHistory((prev) => [record, ...prev].slice(0, 1000));
+    setSensorHistory((prev) => {
+      const filtered = prev.filter((r) => r.id !== record.id);
+      return [record, ...filtered].slice(0, 1000);
+    });
   };
 
   return (

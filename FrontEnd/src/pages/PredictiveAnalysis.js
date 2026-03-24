@@ -20,7 +20,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import axiosApi from "../api/AxiosApi.js";
+import axiosApi from "../api/axiosApi.js";
 
 
 export default function PredictiveAnalysis() {
