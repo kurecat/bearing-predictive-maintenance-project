@@ -14,36 +14,37 @@ def csv_to_json_file(csv_path: str, json_path: str):
 
     for line in lines:
         parts = [p.strip() for p in line.split(",") if p.strip()]
-
         if not parts:
             continue
 
-        # 메타데이터 처리
-        if parts[0].lower() == "date":
+        # 첫 번째 키를 소문자로 바꾸고, 언더바를 공백으로 치환
+        key = parts[0].lower().replace("_", " ")
+
+        if key == "date":
             meta["Date"] = parts[1]
-        elif parts[0].lower() == "filename":
+        elif key == "filename":
             meta["Filename"] = parts[1]
-        elif parts[0].lower() == "data label":
+        elif key == "data label":
             meta["DataLabel"] = parts[1] if len(parts) > 1 else None
-        elif parts[0].lower() == "label no":
+        elif key == "label no":
             meta["LabelNo"] = parts[1] if len(parts) > 1 else None
-        elif parts[0].lower() == "motor spec":
+        elif key == "motor spec":
             meta["MotorSpec"] = ",".join(parts[1:])
-        elif parts[0].lower() == "period":
+        elif key == "period":
             meta["Period"] = parts[1]
-        elif parts[0].lower() == "sample rate":
+        elif key == "sample rate":
             meta["SampleRate"] = int(parts[1])
-        elif parts[0].lower() == "rms":
+        elif key == "rms":
             rms_values = [float(v) for v in parts[1:]]
-        elif parts[0].lower() == "data length":
+        elif key == "data length":
             meta["DataLength"] = int(parts[1])
         else:
-            # 샘플 데이터 처리 (time, x, y, z)
             try:
                 sample = [float(p) for p in parts]
                 samples.append(sample)
             except ValueError:
                 pass
+
 
     # 최종 JSON 구조
     result = {

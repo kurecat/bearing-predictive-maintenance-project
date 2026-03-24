@@ -18,23 +18,26 @@ def csv_to_json_post(csv_path: str, url: str):
         if not parts:
             continue
 
-        if parts[0].lower() == "date":
+        # 첫 번째 키를 소문자로 바꾸고, 언더바를 공백으로 치환
+        key = parts[0].lower().replace("_", " ")
+
+        if key == "date":
             meta["Date"] = parts[1]
-        elif parts[0].lower() == "filename":
+        elif key == "filename":
             meta["Filename"] = parts[1]
-        elif parts[0].lower() == "data label":
+        elif key == "data label":
             meta["DataLabel"] = parts[1] if len(parts) > 1 else None
-        elif parts[0].lower() == "label no":
+        elif key == "label no":
             meta["LabelNo"] = parts[1] if len(parts) > 1 else None
-        elif parts[0].lower() == "motor spec":
+        elif key == "motor spec":
             meta["MotorSpec"] = ",".join(parts[1:])
-        elif parts[0].lower() == "period":
+        elif key == "period":
             meta["Period"] = parts[1]
-        elif parts[0].lower() == "sample rate":
+        elif key == "sample rate":
             meta["SampleRate"] = int(parts[1])
-        elif parts[0].lower() == "rms":
+        elif key == "rms":
             rms_values = [float(v) for v in parts[1:]]
-        elif parts[0].lower() == "data length":
+        elif key == "data length":
             meta["DataLength"] = int(parts[1])
         else:
             try:
@@ -42,6 +45,7 @@ def csv_to_json_post(csv_path: str, url: str):
                 samples.append(sample)
             except ValueError:
                 pass
+
 
     result = {
         "Date": meta.get("Date"),

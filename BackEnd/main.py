@@ -8,6 +8,9 @@ from pymongo import MongoClient
 import uvicorn
 from predictor import predict
 from datetime import datetime
+import logging
+
+logger = logging.getLogger("uvicorn")  # uvicorn 기본 로거 사용
 
 # === MongoDB 연결 ===
 client = MongoClient("mongodb://localhost:27017")
@@ -16,12 +19,10 @@ db = client["bearing_predictive_maintenance"]
 # capped collection 생성 (최대 1000개 문서)
 collections = [
     "devices",
-    "current_rms",
-    "current_samples",
-    "current_metadata",
     "vibration_rms",
     "vibration_samples",
-    "vibration_metadata"
+    "vibration_metadata",
+    "analyze_results",
 ]
 
 for col in collections:
@@ -38,12 +39,10 @@ for col in collections:
 
 # 컬렉션 핸들러 준비
 devices_col = db["devices"]
-current_rms_col = db["current_rms"]
-current_samples_col = db["current_samples"]
-current_metadata_col = db["current_metadata"]
 vibration_rms_col = db["vibration_rms"]
 vibration_samples_col = db["vibration_samples"]
 vibration_metadata_col = db["vibration_metadata"]
+analyze_results_col = db["analyze_results"]
 
 # 연결 관리용 리스트
 active_connections = []
@@ -267,6 +266,86 @@ def get_vibration_samples(device_id: str):
     docs = list(vibration_metadata_col.find({"device_ref": ObjectId(device_id)}))
     samples = [doc.get("samples") for doc in docs if "samples" in doc]
     return {"device_id": device_id, "samples": samples}
+
+@app.post("/api/analyze/vibration")
+async def analyze_vibration(data: UploadData):
+    spec = parse_motor_spec(data.MotorSpec)
+    probs = predict(data.Samples, spec["power_kw"])
+    prob = max(probs[1:]) if probs else None
+
+    # 상태 판정 로직 (생략: 기존 코드 그대로)
+    if prob is None:
+        status = "분석 불가"
+        status_color = "#9ca3af"  # 회색
+        alarm = "데이터가 부족하여 분석할 수 없습니다."
+        guide = "데이터를 다시 확인하세요."
+    elif prob <= 0.3:
+        status = "정상: 특이사항 없음"
+        status_color = "#10b981"  # 초록
+        alarm = "안정적인 상태를 유지하고 있습니다."
+        guide = "지속적인 모니터링 수행"
+    elif prob < 0.7:
+        status = "주의: 이상 진동 패턴 감지"
+        status_color = "#f59e0b"  # 주황
+        alarm = "현 추세 유지 시 점검이 필요합니다."
+        guide = "설비 체결 상태 확인 및 정밀 진단 권장"
+    else:
+        status = "고장: 심각한 이상 감지"
+        status_color = "#ef4444"  # 빨강
+        alarm = "즉각적인 점검 및 조치가 필요합니다."
+        guide = "설비를 즉시 정지하고 정밀 진단 수행"
+    
+    # FFT 계산
+    samples = np.array(data.Samples)
+    vibration_vals = samples[:, 1]
+    fft_vals = np.fft.rfft(vibration_vals)
+    fft_freqs = np.fft.rfftfreq(len(vibration_vals), d=0.00025)
+
+    # 진폭 계산
+    amplitudes = np.abs(fft_vals)
+
+    # 상위 10개 피크만 추출
+    top_indices = np.argsort(amplitudes)[-10:][::-1]  # 큰 값부터 정렬
+    fftData = [
+    {"freq": f"{round(fft_freqs[i], 2)}Hz", "amplitude": float(amplitudes[i])}
+    for i in top_indices
+    ]
+
+    response_doc = {
+        "statusColor": status_color,
+        "summary": {
+            "status": status,
+            "probability": int(prob * 100) if prob is not None else None,
+            "alarm": alarm,
+            "guide": guide,
+            "filename": data.Filename,
+            "rms": data.RMS[0] if data.RMS else None,
+            "label": data.DataLabel,
+            "motorSpec": data.MotorSpec,
+        },
+        "waveformData": [{"time": s[0], "vibration": s[1]} for s in data.Samples[:200]],
+        "fftData": fftData,
+        "healthTrend": [{"day": f"D-{14-i}", "score": 95 - i*2} for i in range(14)],
+        "featureImportance": [
+            {"subject": "수평 진동 (X)", "A": 20, "fullMark": 100},
+            {"subject": "수직 진동 (Y)", "A": 15, "fullMark": 100},
+            {"subject": "축방향 진동 (Z)", "A": 25, "fullMark": 100},
+            {"subject": "온도 편차", "A": 30, "fullMark": 100},
+            {"subject": "고주파 소음", "A": 10, "fullMark": 100},
+        ]
+    }
+
+    result = analyze_results_col.insert_one(response_doc)
+    response_doc["_id"] = str(result.inserted_id)
+
+    return response_doc
+
+
+    result = analyze_results_col.insert_one(response_doc)
+    response_doc["_id"] = str(result.inserted_id)
+
+    return response_doc
+
 
 @app.websocket("/socket/devices")
 async def device_socket(websocket: WebSocket):

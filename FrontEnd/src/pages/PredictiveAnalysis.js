@@ -42,150 +42,85 @@ export default function PredictiveAnalysis() {
     }
 
     setIsAnalyzing(true);
-    
-    // 데이터 받기
-    axiosApi.post("/analyze", { filename: file.name })
-      .then((response) => {
-        setResult(response);
-        setIsAnalyzing(false);
-      })
-      .catch((error) => {
-        console.error("Analysis Error:", error);
-        setIsAnalyzing(false);
-      });
 
-    setResult(null);
-
-    // 브라우저에서 직접 파일을 읽는 객체
     const reader = new FileReader();
-
-    // 파일을 다 읽었을 때 실행할 로직
     reader.onload = (e) => {
-      const text = e.target.result;
+      const lines = e.target.result.split("\n").map(line => line.trim()).filter(line => line);
 
-      // 줄바꿈 단위로 데이터를 쪼개고, 빈 줄은 버림
-      const lines = text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line);
+      let meta = {};
+      let rmsValues = [];
+      let samples = [];
 
-      let metadata = {};
-      let dataStartIndex = 9; // 데이터가 시작되는 기본 줄 번호
+      for (let line of lines) {
+        const parts = line.split(",").map(p => p.trim()).filter(p => p);
+        if (!parts.length) continue;
 
-      // 상단 20줄 정도만 읽어서 메타데이터(RMS, 라벨 등) 추출
-      for (let i = 0; i < Math.min(20, lines.length); i++) {
-        const parts = lines[i].split(",");
+        // 첫 번째 키를 소문자로 바꾸고 언더바를 공백으로 치환
+        const key = parts[0].toLowerCase().replace("_", " ");
 
-        // "Data Length"라는 글씨를 만나면, 그 다음 줄부터가 진짜 진동 수치
-        if (parts[0] === "Data Length") {
-          metadata["Data Length"] = parts[1];
-          dataStartIndex = i + 1;
-          break; // 메타데이터 읽기 종료
-        }
-
-        // 숫자가 아닌 글씨로 시작하면 표기 정보(메타데이터)로 저장
-        if (parts.length >= 2 && isNaN(parseFloat(parts[0]))) {
-          metadata[parts[0]] = parts[1];
-        }
-      }
-
-      // 실제 시계열(시간에 따른 진동) 데이터 추출
-      const rawData = [];
-      let maxAbsVibration = 0;
-
-      for (let i = dataStartIndex; i < lines.length; i++) {
-        const parts = lines[i].split(",");
-        if (parts.length >= 2) {
-          const time = parseFloat(parts[0]);
-          const vibration = parseFloat(parts[1]);
-
-          // 숫자가 맞을 때만 배열에 밀어넣기
-          if (!isNaN(time) && !isNaN(vibration)) {
-            rawData.push({ time, vibration });
-
-            // 제일 큰 진동 폭 구하기 (나중에 가짜 데이터 만들 때 씀)
-            if (Math.abs(vibration) > maxAbsVibration) {
-              maxAbsVibration = Math.abs(vibration);
+        switch (key) {
+          case "date":
+            meta.Date = parts[1];
+            break;
+          case "filename":
+            meta.Filename = parts[1];
+            break;
+          case "data label":
+            meta.DataLabel = parts[1] || null;
+            break;
+          case "label no":
+            meta.LabelNo = parts[1] || null;
+            break;
+          case "motor spec":
+            meta.MotorSpec = parts.slice(1).join(",");
+            break;
+          case "period":
+            meta.Period = parts[1];
+            break;
+          case "sample rate":
+            meta.SampleRate = parseInt(parts[1]);
+            break;
+          case "rms":
+            rmsValues = parts.slice(1).map(v => parseFloat(v));
+            break;
+          case "data length":
+            meta.DataLength = parseInt(parts[1]);
+            break;
+          default:
+            const nums = parts.map(p => parseFloat(p));
+            if (nums.every(n => !isNaN(n))) {
+              samples.push(nums);
             }
-          }
         }
       }
 
-      // 12,000개의 점을 다 그리면 버벅거리므로 200개로 듬성듬성 뽑아냄
-      const targetPoints = 100;
-      const step = Math.max(1, Math.floor(rawData.length / targetPoints));
-      const downsampledData = [];
+      const result = {
+        Date: meta.Date,
+        Filename: meta.Filename,
+        DataLabel: meta.DataLabel,
+        LabelNo: meta.LabelNo,
+        MotorSpec: meta.MotorSpec,
+        Period: meta.Period,
+        SampleRate: meta.SampleRate,
+        RMS: rmsValues,
+        DataLength: meta.DataLength,
+        Samples: samples,
+      };
 
-      for (let i = 0; i < rawData.length; i += step) {
-        downsampledData.push({
-          time: rawData[i].time.toFixed(4) + "s",
-          vibration: rawData[i].vibration,
+      // 서버로 JSON 전송
+      axiosApi.post("/analyze/vibration", result, {
+        headers: { "Content-Type": "application/json" }
+      })
+        .then((response) => {
+          setResult(response);
+          setIsAnalyzing(false);
+        })
+        .catch((error) => {
+          console.error("Analysis Error:", error);
+          setIsAnalyzing(false);
         });
-      }
-
-      // CSV 안에 적혀있는 진짜 'Data Label'을 기준으로 정상/불량 판단
-      const isNormal = metadata["Data Label"] === "정상";
-      const statusColor = isNormal ? "#10b981" : "#ef4444"; // 정상이면 초록, 아니면 빨강
-      const rms = parseFloat(metadata["RMS"]) || maxAbsVibration * 0.707;
-
-      // 주파수(FFT) 데이터는 쌩 자바스크립트로 계산하기 무거우므로, RMS 값을 이용해 그럴싸하게 생성
-      const fftData = [
-        { freq: "0.5X", amplitude: isNormal ? rms * 0.5 : rms * 2.5 },
-        { freq: "1X (RPM)", amplitude: isNormal ? rms * 1.2 : rms * 8.5 },
-        { freq: "1.5X", amplitude: isNormal ? rms * 0.3 : rms * 1.8 },
-        { freq: "2X", amplitude: isNormal ? rms * 0.8 : rms * 6.2 },
-        { freq: "2.5X", amplitude: isNormal ? rms * 0.2 : rms * 0.5 },
-        { freq: "3X", amplitude: isNormal ? rms * 0.4 : rms * 2.1 },
-        { freq: "4X", amplitude: isNormal ? rms * 0.1 : rms * 0.9 },
-      ].map((d) => ({ ...d, amplitude: parseFloat(d.amplitude.toFixed(4)) }));
-
-      // 1.5초 뒤에 결과 화면 보여주기 (분석하는 느낌 연출)
-      setTimeout(() => {
-        setResult({
-          statusColor: statusColor,
-          summary: {
-            status: isNormal
-              ? "정상: 특이사항 없음"
-              : "주의: 이상 진동 패턴 감지",
-            probability: isNormal
-              ? Math.floor(Math.random() * 15) + 5
-              : Math.floor(Math.random() * 20) + 75,
-            alarm: isNormal
-              ? "안정적인 상태를 유지하고 있습니다."
-              : "현 추세 유지 시 점검이 필요합니다.",
-            guide: isNormal
-              ? "지속적인 모니터링 수행"
-              : "설비 체결 상태 확인 및 정밀 진단 권장",
-            filename: file.name,
-            rms: rms.toFixed(4), // CSV에서 빼온 실제 RMS
-            label: metadata["Data Label"] || "알 수 없음", // CSV에서 빼온 진짜 라벨
-            motorSpec: metadata["Motor Spec"] || "N/A",
-          },
-          waveformData: downsampledData, // 압축한 실제 진동 데이터
-          fftData: fftData,
-          healthTrend: Array.from({ length: 14 }, (_, i) => ({
-            day: `D-${14 - i}`,
-            score: isNormal
-              ? Math.max(85, 95 - Math.random() * 5).toFixed(1)
-              : Math.max(0, 95 - i * i * 0.3 - Math.random() * 5).toFixed(1),
-          })),
-          featureImportance: [
-            { subject: "수평 진동 (X)", A: isNormal ? 20 : 85, fullMark: 100 },
-            { subject: "수직 진동 (Y)", A: isNormal ? 15 : 65, fullMark: 100 },
-            {
-              subject: "축방향 진동 (Z)",
-              A: isNormal ? 25 : 92,
-              fullMark: 100,
-            },
-            { subject: "온도 편차", A: isNormal ? 30 : 45, fullMark: 100 },
-            { subject: "고주파 소음", A: isNormal ? 10 : 70, fullMark: 100 },
-          ],
-        });
-        setIsAnalyzing(false);
-      }, 1500);
     };
 
-    // 파일 읽기 실행
     reader.readAsText(file, "UTF-8");
   };
 
@@ -439,7 +374,7 @@ export default function PredictiveAnalysis() {
               </ChartWrapper>
             </ChartCard>
 
-            {/* <ChartCard>
+            <ChartCard>
               <ChartTitle>결함 요인 기여도 (Feature Importance)</ChartTitle>
               <ChartSubtitle>
                 현재 진단 결과에 가장 큰 영향을 미친 요소
@@ -480,7 +415,7 @@ export default function PredictiveAnalysis() {
                   </RadarChart>
                 </ResponsiveContainer>
               </ChartWrapper>
-            </ChartCard> */}
+            </ChartCard>
           </ChartGrid>
         </ResultSection>
       )}
