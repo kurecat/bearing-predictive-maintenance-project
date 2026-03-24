@@ -166,42 +166,6 @@ async def broadcast_event(event: str, device: dict, meta: dict, rms_values: list
     for conn in active_connections:
         await conn.send_json(payload)
 
-# === 업로드 엔드포인트 (Current) ===
-@app.post("/api/upload/current")
-async def upload_current(data: UploadData):
-    spec = parse_motor_spec(data.MotorSpec)
-    device_ref = find_or_create_device(spec)
-
-    rms_result = current_rms_col.insert_one({
-        "device_ref": device_ref,
-        "values": data.RMS
-    })
-    rms_id = rms_result.inserted_id
-
-    samples_result = current_samples_col.insert_one({
-        "device_ref": device_ref,
-        "samples": data.Samples
-    })
-    samples_id = samples_result.inserted_id
-
-    meta_result = current_metadata_col.insert_one({
-        "device_ref": device_ref,
-        "date": data.Date,
-        "filename": data.Filename,
-        "data_label": data.DataLabel,
-        "label_no": data.LabelNo,
-        "period": data.Period,
-        "sample_rate": data.SampleRate,
-        "data_length": data.DataLength,
-        "rms_id": rms_id,
-        "samples_id": samples_id
-    })
-
-    meta_doc = current_metadata_col.find_one({"_id": meta_result.inserted_id})
-    await broadcast_event("current_data", meta_doc, data.RMS)
-
-    return {"status": "ok", "metadata_id": str(meta_result.inserted_id)}
-
 # === 업로드 엔드포인트 (Vibration) ===
 @app.post("/api/upload/vibration")
 async def upload_vibration(data: UploadData):
@@ -222,7 +186,7 @@ async def upload_vibration(data: UploadData):
     samples_id = samples_result.inserted_id
 
     # === 모델 추론 호출 ===
-    probs = predict(data.Samples)
+    probs = predict(data.Samples, device["motor_spec"]["power_kw"])
     prob = max(probs[1:]) if probs else None
 
     meta_result = vibration_metadata_col.insert_one({
@@ -253,31 +217,6 @@ def get_devices():
     for d in devices:
         d["_id"] = str(d["_id"])
     return devices
-
-# === 조회 엔드포인트 (Current History) ===
-@app.get("/api/devices/{device_id}/current")
-def get_current_history(device_id: str):
-    history = list(current_metadata_col.find({"device_ref": ObjectId(device_id)}))
-    for h in history:
-        h["_id"] = str(h["_id"])
-        h["device_ref"] = str(h["device_ref"])
-        h["rms_id"] = str(h["rms_id"])
-        h["samples_id"] = str(h["samples_id"])
-    return history
-
-# RMS 조회
-@app.get("/api/devices/{device_id}/current/rms")
-def get_current_rms(device_id: str):
-    docs = list(current_metadata_col.find({"device_ref": ObjectId(device_id)}))
-    rms_values = [doc.get("rms") for doc in docs if "rms" in doc]
-    return {"device_id": device_id, "rms": rms_values}
-
-# Samples 조회
-@app.get("/api/devices/{device_id}/current/samples")
-def get_current_samples(device_id: str):
-    docs = list(current_metadata_col.find({"device_ref": ObjectId(device_id)}))
-    samples = [doc.get("samples") for doc in docs if "samples" in doc]
-    return {"device_id": device_id, "samples": samples}
 
 # === 조회 엔드포인트 (Vibration History) ===
 @app.get("/api/devices/{device_id}/vibration")

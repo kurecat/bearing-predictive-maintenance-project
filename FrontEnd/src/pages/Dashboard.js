@@ -25,25 +25,28 @@ export default function Dashboard() {
   useEffect(() => {
     if (!sensorHistory || sensorHistory.length === 0) return;
 
-    // ID별로 가장 최신 데이터 하나씩만 추출하여 노드 리스트 구성
     const latestById = {};
-    const orderedNodes = [];
 
-    // 역순으로 탐색하거나, Map을 사용하여 중복 제거
-    [...sensorHistory].reverse().forEach((record) => {
+    for (const record of [...sensorHistory].reverse()) {
       latestById[record.id] = {
         id: record.id,
         name: record.name,
         vibration: record.vibration,
-        prob: record.prob,
+        prob: (record.prob * 100).toFixed(0), // 0~1 -> 0~100%
         date: record.date,
         time: record.time,
         filename: record.filename,
       };
-    });
+    }
 
-    setNodes(Object.values(latestById));
+    // 원하는 기준으로 정렬 (여기서는 id 기준)
+    const orderedNodes = Object.values(latestById).sort((a, b) =>
+      a.id.localeCompare(b.id)
+    );
+
+    setNodes(orderedNodes);
   }, [sensorHistory]);
+
 
   // 2. 통계 데이터 계산
   const normalMotors = nodes.filter((n) => n.prob < 30).length;

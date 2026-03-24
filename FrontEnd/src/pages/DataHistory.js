@@ -71,7 +71,7 @@ export default function DataHistory() {
               date: h.metadata.date.split(" ")[0],
               time: h.metadata.date.split(" ")[1],
               vibration: h.rms[0],
-              prob: h.metadata.prob,
+              prob: (h.metadata.prob * 100).toFixed(0), // 0~1 -> 0~100%
               filename: h.metadata.filename,
             };
             return historyFormat;
