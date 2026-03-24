@@ -11,7 +11,7 @@ const Layout = ({ children, toggleTheme }) => {
   const [globalNotifications, setGlobalNotifications] = useState([]);
   const [sensorHistory, setSensorHistory] = useState([]);
 
-  const socketQueue = new SocketQueue("ws://192.168.1.66:8000/socket/devices");
+  const socketQueue = new SocketQueue();
 
   useEffect(() => {
     socketQueue.connect();
