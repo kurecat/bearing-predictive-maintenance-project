@@ -32,26 +32,24 @@ def process_file(dirpath, fname):
     else:
         print(f"⚠️ 엔드포인트를 알 수 없음: {filepath}")
 
+def folder_worker(dirpath, filenames, interval=5):
+    """한 폴더의 파일들을 순환 처리"""
+    idx = 0
+    while True:
+        fname = filenames[idx]
+        process_file(dirpath, fname)
+        time.sleep(interval)  # 파일 간 대기
+        idx = (idx + 1) % len(filenames)  # 마지막까지 가면 다시 첫 파일로
+
 root = "e:/data_vibration"
 normal_dirs = collect_normal_dirs(root)
 
-folder_interval = 5  # 전체 처리 후 인터벌(초)
-max_files = max(len(filenames) for _, filenames in normal_dirs)
+# 폴더별로 독립 스레드 실행
+for dirpath, filenames in normal_dirs:
+    t = threading.Thread(target=folder_worker, args=(dirpath, filenames, 5))
+    t.daemon = True
+    t.start()
 
-# 파일 인덱스별 병렬 처리
-for i in range(max_files):
-    threads = []
-    for dirpath, filenames in normal_dirs:
-        if i < len(filenames):
-            t = threading.Thread(target=process_file, args=(dirpath, filenames[i]))
-            t.start()
-            threads.append(t)
-    # 모든 스레드 대기
-    for t in threads:
-        t.join()
-
-    # 전체가 끝나면 인터벌
-    print(f"⏸ {folder_interval}초 대기 후 다음 처리")
-    time.sleep(folder_interval)
-
-print("✅ 모든 파일 처리 완료")
+print("🔄 모든 폴더 스레드 실행 중 (무한 반복)")
+while True:
+    time.sleep(60)  # 메인 스레드는 계속 살아있게 유지
