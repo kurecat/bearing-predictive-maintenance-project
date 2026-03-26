@@ -1,7 +1,7 @@
 import React, { useState, useContext, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
 
-import axiosApi from "../api/AxiosApi";
+import axiosApi from "../api/axiosApi";
 import {
   Line,
   ComposedChart,
