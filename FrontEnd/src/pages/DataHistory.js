@@ -1,6 +1,7 @@
 import React, { useState, useContext, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
-import axiosApi from "../api/axiosApi";
+
+import axiosApi from "../api/AxiosApi";
 import {
   Line,
   ComposedChart,
@@ -58,36 +59,38 @@ export default function DataHistory() {
   }, [filteredHistory, currentPage]);
 
   useEffect(() => {
-  const fetchAllDeviceHistories = async () => {
-    try {
-      const devices = await axiosApi.get("/devices");
-      const allHistories = await Promise.all(
-        devices.map(async (device) => {
-          const history = await axiosApi.get(`/devices/${device._id}/vibration`);
-          return history.map((h) => {
-            const historyFormat = {
-              id: h._id,
-              name: h.device.alias ?? h.device.motor_spec.model,
-              date: h.metadata.date.split(" ")[0],
-              time: h.metadata.date.split(" ")[1],
-              vibration: h.rms[0],
-              prob: (h.metadata.prob * 100).toFixed(0), // 0~1 -> 0~100%
-              filename: h.metadata.filename,
-            };
-            return historyFormat;
-          });
-        })
-      );
-      const merged = allHistories.flat();
-      console.log("Fetched device histories:", merged);
-      setSensorHistory(merged);
-    } catch (err) {
-      console.error("Failed to fetch device histories:", err);
-    }
-  };
+    const fetchAllDeviceHistories = async () => {
+      try {
+        const devices = await axiosApi.get("/devices");
+        const allHistories = await Promise.all(
+          devices.map(async (device) => {
+            const history = await axiosApi.get(
+              `/devices/${device._id}/vibration`,
+            );
+            return history.map((h) => {
+              const historyFormat = {
+                id: h._id,
+                name: h.device.alias ?? h.device.motor_spec.model,
+                date: h.metadata.date.split(" ")[0],
+                time: h.metadata.date.split(" ")[1],
+                vibration: h.rms[0],
+                prob: (h.metadata.prob * 100).toFixed(0), // 0~1 -> 0~100%
+                filename: h.metadata.filename,
+              };
+              return historyFormat;
+            });
+          }),
+        );
+        const merged = allHistories.flat();
+        console.log("Fetched device histories:", merged);
+        setSensorHistory(merged);
+      } catch (err) {
+        console.error("Failed to fetch device histories:", err);
+      }
+    };
 
-  fetchAllDeviceHistories();
-}, []);
+    fetchAllDeviceHistories();
+  }, []);
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDevice, startDate, endDate]);
@@ -251,11 +254,11 @@ export default function DataHistory() {
                 <XAxis
                   dataKey="time"
                   tick={{ fontSize: 10, fill: "var(--font2)" }}
-                  domain={["auto","auto"]}
+                  domain={["auto", "auto"]}
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  domain={["auto","auto"]}
+                  domain={["auto", "auto"]}
                   // {[0, (dataMax) => Math.max(dataMax, 0.25)]}
                 />
                 <Tooltip
@@ -854,6 +857,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-    props.$active ? "var(--main)" : "var(--background2)"};
+      props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;

@@ -20,8 +20,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import axiosApi from "../api/axiosApi.js";
-
+import axiosApi from "../api/AxiosApi";
 
 export default function PredictiveAnalysis() {
   const [file, setFile] = useState(null);
@@ -45,14 +44,20 @@ export default function PredictiveAnalysis() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const lines = e.target.result.split("\n").map(line => line.trim()).filter(line => line);
+      const lines = e.target.result
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line);
 
       let meta = {};
       let rmsValues = [];
       let samples = [];
 
       for (let line of lines) {
-        const parts = line.split(",").map(p => p.trim()).filter(p => p);
+        const parts = line
+          .split(",")
+          .map((p) => p.trim())
+          .filter((p) => p);
         if (!parts.length) continue;
 
         // 첫 번째 키를 소문자로 바꾸고 언더바를 공백으로 치환
@@ -81,14 +86,14 @@ export default function PredictiveAnalysis() {
             meta.SampleRate = parseInt(parts[1]);
             break;
           case "rms":
-            rmsValues = parts.slice(1).map(v => parseFloat(v));
+            rmsValues = parts.slice(1).map((v) => parseFloat(v));
             break;
           case "data length":
             meta.DataLength = parseInt(parts[1]);
             break;
           default:
-            const nums = parts.map(p => parseFloat(p));
-            if (nums.every(n => !isNaN(n))) {
+            const nums = parts.map((p) => parseFloat(p));
+            if (nums.every((n) => !isNaN(n))) {
               samples.push(nums);
             }
         }
@@ -108,9 +113,10 @@ export default function PredictiveAnalysis() {
       };
 
       // 서버로 JSON 전송
-      axiosApi.post("/analyze/vibration", result, {
-        headers: { "Content-Type": "application/json" }
-      })
+      axiosApi
+        .post("/analyze/vibration", result, {
+          headers: { "Content-Type": "application/json" },
+        })
         .then((response) => {
           setResult(response);
           setIsAnalyzing(false);
