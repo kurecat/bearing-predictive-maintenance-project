@@ -1,6 +1,6 @@
 import React, { useState, useContext, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
-import axiosApi from "../api/axiosApi";
+import axiosApi from "../api/AxiosApi";
 import {
   Line,
   ComposedChart,
@@ -60,10 +60,10 @@ export default function DataHistory() {
   useEffect(() => {
   const fetchAllDeviceHistories = async () => {
     try {
-      const devices = await axiosApi.get("/devices");
+      const devices = await axiosApi.get("/api/devices");
       const allHistories = await Promise.all(
         devices.map(async (device) => {
-          const history = await axiosApi.get(`/devices/${device._id}/vibration`);
+          const history = await axiosApi.get(`/api/devices/${device._id}/vibration`);
           return history.map((h) => {
             const historyFormat = {
               id: h._id,

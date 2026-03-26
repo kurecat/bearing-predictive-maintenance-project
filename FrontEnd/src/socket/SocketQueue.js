@@ -1,7 +1,7 @@
 // SocketQueue.js
 class SocketQueue {
   constructor() {
-    this.url = "ws://192.168.1.66:8000/socket/devices";
+    this.url = "ws://127.0.0.1:8000/socket/devices";
     this.socket = null;
     this.queue = [];
     this.isConnected = false;

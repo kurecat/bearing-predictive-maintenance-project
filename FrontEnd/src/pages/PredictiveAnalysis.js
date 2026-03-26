@@ -20,7 +20,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import axiosApi from "../api/axiosApi.js";
+import axiosApi from "../api/AxiosApi.js";
 
 
 export default function PredictiveAnalysis() {
@@ -108,7 +108,7 @@ export default function PredictiveAnalysis() {
       };
 
       // 서버로 JSON 전송
-      axiosApi.post("/analyze/vibration", result, {
+      axiosApi.post("/api/analyze/vibration", result, {
         headers: { "Content-Type": "application/json" }
       })
         .then((response) => {
