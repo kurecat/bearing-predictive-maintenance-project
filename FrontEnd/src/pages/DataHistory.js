@@ -1,6 +1,6 @@
 import React, { useState, useContext, useMemo, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
-import axiosApi from "../api/AxiosApi";
+import axiosApi from "../api/axiosApi";
 import {
   Line,
   ComposedChart,
@@ -60,10 +60,10 @@ export default function DataHistory() {
   useEffect(() => {
   const fetchAllDeviceHistories = async () => {
     try {
-      const devices = await axiosApi.get("/api/devices");
+      const devices = await axiosApi.get("/devices");
       const allHistories = await Promise.all(
         devices.map(async (device) => {
-          const history = await axiosApi.get(`/api/devices/${device._id}/vibration`);
+          const history = await axiosApi.get(`/devices/${device._id}/vibration`);
           return history.map((h) => {
             const historyFormat = {
               id: h._id,
@@ -86,8 +86,8 @@ export default function DataHistory() {
     }
   };
 
-  fetchAllDeviceHistories();
-}, []);
+    fetchAllDeviceHistories();
+  }, []);
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedDevice, startDate, endDate]);
@@ -251,11 +251,11 @@ export default function DataHistory() {
                 <XAxis
                   dataKey="time"
                   tick={{ fontSize: 10, fill: "var(--font2)" }}
-                  domain={["auto","auto"]}
+                  domain={["auto", "auto"]}
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  domain={["auto","auto"]}
+                  domain={["auto", "auto"]}
                   // {[0, (dataMax) => Math.max(dataMax, 0.25)]}
                 />
                 <Tooltip
@@ -570,12 +570,12 @@ export default function DataHistory() {
 }
 
 const PageContainer = styled.div`
-  padding: 30px;
+  padding: 20px;
   background-color: var(--background2);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 20px;
 `;
 const Header = styled.div`
   margin-bottom: 5px;
@@ -609,7 +609,7 @@ const KpiLabel = styled.div`
   font-weight: 600;
 `;
 const KpiValue = styled.div`
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   color: ${(props) => props.$color || "var(--font)"};
   margin-top: 10px;
@@ -854,6 +854,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-    props.$active ? "var(--main)" : "var(--background2)"};
+      props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;

@@ -20,8 +20,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+<<<<<<< HEAD
 import axiosApi from "../api/AxiosApi.js";
 
+=======
+import axiosApi from "../api/AxiosApi";
+>>>>>>> e2123d08fb2e1add0fac572d39f6ff9e31fd5306
 
 export default function PredictiveAnalysis() {
   const [file, setFile] = useState(null);
@@ -45,14 +49,20 @@ export default function PredictiveAnalysis() {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const lines = e.target.result.split("\n").map(line => line.trim()).filter(line => line);
+      const lines = e.target.result
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line);
 
       let meta = {};
       let rmsValues = [];
       let samples = [];
 
       for (let line of lines) {
-        const parts = line.split(",").map(p => p.trim()).filter(p => p);
+        const parts = line
+          .split(",")
+          .map((p) => p.trim())
+          .filter((p) => p);
         if (!parts.length) continue;
 
         // 첫 번째 키를 소문자로 바꾸고 언더바를 공백으로 치환
@@ -81,14 +91,14 @@ export default function PredictiveAnalysis() {
             meta.SampleRate = parseInt(parts[1]);
             break;
           case "rms":
-            rmsValues = parts.slice(1).map(v => parseFloat(v));
+            rmsValues = parts.slice(1).map((v) => parseFloat(v));
             break;
           case "data length":
             meta.DataLength = parseInt(parts[1]);
             break;
           default:
-            const nums = parts.map(p => parseFloat(p));
-            if (nums.every(n => !isNaN(n))) {
+            const nums = parts.map((p) => parseFloat(p));
+            if (nums.every((n) => !isNaN(n))) {
               samples.push(nums);
             }
         }
@@ -108,11 +118,23 @@ export default function PredictiveAnalysis() {
       };
 
       // 서버로 JSON 전송
+<<<<<<< HEAD
       axiosApi.post("/api/analyze/vibration", result, {
         headers: { "Content-Type": "application/json" }
       })
+=======
+      axiosApi
+        .post("/analyze/vibration", result, {
+          headers: { "Content-Type": "application/json" },
+        })
+>>>>>>> e2123d08fb2e1add0fac572d39f6ff9e31fd5306
         .then((response) => {
-          setResult(response);
+          const resData = response.data || response;
+
+          const prob = resData.summary.probability;
+          resData.statusColor = prob >= 50 ? "var(--error)" : "var(--main)";
+
+          setResult(resData);
           setIsAnalyzing(false);
         })
         .catch((error) => {
@@ -196,7 +218,7 @@ export default function PredictiveAnalysis() {
               {/* <MetadataText>CSV 파일 라벨: {result.summary.label}</MetadataText> */}
             </ResultCard>
 
-            <ResultCard $borderColor="#3b82f6">
+            <ResultCard $borderColor="var(--main)">
               <CardHeader>데이터 측정 지표 (RMS)</CardHeader>
               <CardBody>{result.summary.rms} mm/s</CardBody>
               <MetadataText>장비 스펙: {result.summary.motorSpec}</MetadataText>
@@ -229,10 +251,10 @@ export default function PredictiveAnalysis() {
                     />
                     <XAxis
                       dataKey="time"
-                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      tick={{ fontSize: 11, fill: "var(--font2)" }}
                       minTickGap={30} // 글씨가 겹치지 않게 간격 띄우기
                     />
-                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--font2)" }} />
                     <Tooltip
                       contentStyle={{
                         borderRadius: "8px",
@@ -275,9 +297,9 @@ export default function PredictiveAnalysis() {
                     />
                     <XAxis
                       dataKey="freq"
-                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      tick={{ fontSize: 11, fill: "var(--font2)" }}
                     />
-                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--font2)" }} />
                     <Tooltip
                       cursor={{ fill: "#f1f5f9" }}
                       contentStyle={{
@@ -424,14 +446,13 @@ export default function PredictiveAnalysis() {
   );
 }
 
-// --- CSS 스타일 ---
 const PageContainer = styled.div`
-  padding: 30px;
-  background-color: #f8fafc;
-  min-height: calc(100vh - 50px);
+  padding: 20px;
+  background-color: var(--background2);
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 20px;
 `;
 
 const Header = styled.div`
@@ -446,9 +467,9 @@ const Title = styled.h2`
 `;
 
 const Subtitle = styled.div`
-  font-size: 15px;
-  color: #64748b;
-  margin-top: 8px;
+  font-size: 14px;
+  color: var(--font2);
+  margin-top: 5px;
 `;
 
 const UploadSection = styled.div`
@@ -458,7 +479,8 @@ const UploadSection = styled.div`
   background: white;
   padding: 30px;
   border-radius: 16px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.5s ease-in-out;
 `;
 
 const UploadBox = styled.div`
@@ -470,7 +492,7 @@ const UploadBox = styled.div`
   background-color: #f8fafc;
 
   &:hover {
-    border-color: #3b82f6;
+    border-color: var(--main);
     background-color: #eff6ff;
   }
 
@@ -484,7 +506,7 @@ const UploadBox = styled.div`
 `;
 
 const UploadIcon = styled.div`
-  color: #3b82f6;
+  color: var(--main);
 `;
 
 const UploadText = styled.div`
@@ -495,7 +517,7 @@ const UploadText = styled.div`
 
 const AnalyzeButton = styled.button`
   padding: 16px;
-  background-color: #3b82f6;
+  background-color: var(--main);
   color: white;
   border: none;
   border-radius: 8px;
@@ -512,7 +534,6 @@ const AnalyzeButton = styled.button`
   }
 
   &:hover:not(:disabled) {
-    background-color: #2563eb;
     transform: translateY(-1px);
   }
 `;
@@ -535,7 +556,7 @@ const Spinner = styled.div`
   width: 50px;
   height: 50px;
   border: 4px solid #e2e8f0;
-  border-top: 4px solid #3b82f6;
+  border-top: 4px solid var(--main);
   border-radius: 50%;
   animation: ${spin} 1s linear infinite;
 `;
@@ -543,12 +564,12 @@ const Spinner = styled.div`
 const LoadingText = styled.div`
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--font);
 `;
 
 const LoadingSub = styled.div`
   font-size: 14px;
-  color: #64748b;
+  color: var(--font2);
 `;
 
 const ResultSection = styled.div`
@@ -572,20 +593,11 @@ const ResultSection = styled.div`
 const SectionTitle = styled.h3`
   font-size: 20px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--font);
   margin: 10px 0 0 0;
   display: flex;
   align-items: center;
   gap: 8px;
-
-  &::before {
-    content: "";
-    display: inline-block;
-    width: 4px;
-    height: 20px;
-    background-color: #3b82f6;
-    border-radius: 4px;
-  }
 `;
 
 const ResultGrid = styled.div`
@@ -603,7 +615,7 @@ const ResultCard = styled.div`
 
 const CardHeader = styled.div`
   font-size: 15px;
-  color: #64748b;
+  color: var(--font2);
   font-weight: 700;
   margin-bottom: 12px;
 `;
@@ -611,7 +623,7 @@ const CardHeader = styled.div`
 const CardBody = styled.div`
   font-size: 18px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--font);
   line-height: 1.5;
 `;
 
@@ -620,9 +632,8 @@ const Probability = styled.span`
 `;
 const MetadataText = styled.div`
   font-size: 13px;
-  color: #94a3b8;
-  margin-top: 10px;
-  padding-top: 10px;
+  color: var(--font2);
+  margin-top: 5px;
 `;
 
 const ChartGrid = styled.div`
@@ -643,13 +654,13 @@ const ChartCard = styled.div`
 const ChartTitle = styled.h4`
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--font);
   margin: 0 0 6px 0;
 `;
 
 const ChartSubtitle = styled.p`
   font-size: 13px;
-  color: #64748b;
+  color: var(--font2);
   margin: 0 0 20px 0;
 `;
 
