@@ -13,7 +13,7 @@ class SocketQueue {
     this.socket = new WebSocket(this.url);
 
     this.socket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log("WebSocket connected");
       this.isConnected = true;
     };
 
@@ -26,12 +26,12 @@ class SocketQueue {
     };
 
     this.socket.onclose = () => {
-      console.log('WebSocket disconnected');
+      console.log("WebSocket disconnected");
       this.isConnected = false;
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("WebSocket error:", error);
     };
   }
 

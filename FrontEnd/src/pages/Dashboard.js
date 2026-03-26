@@ -27,7 +27,7 @@ export default function Dashboard() {
   const totalPages = Math.ceil(
     nodes.length <= firstPageItems
       ? 1
-      : 1 + Math.ceil((nodes.length - firstPageItems) / itemsPerPage)
+      : 1 + Math.ceil((nodes.length - firstPageItems) / itemsPerPage),
   );
 
   const currentItems = useMemo(() => {
@@ -71,12 +71,11 @@ export default function Dashboard() {
 
     // 원하는 기준으로 정렬 (여기서는 id 기준)
     const orderedNodes = Object.values(latestById).sort((a, b) =>
-      a.id.localeCompare(b.id)
+      a.id.localeCompare(b.id),
     );
 
     setNodes(orderedNodes);
   }, [sensorHistory]);
-
 
   // 2. 통계 데이터 계산
   const normalMotors = nodes.filter((n) => n.prob < 30).length;
@@ -322,7 +321,6 @@ export default function Dashboard() {
           </PageBtn>
         </PaginationContainer>
       )}
-
     </PageContainer>
   );
 }
@@ -330,7 +328,7 @@ export default function Dashboard() {
 // Styled Components (기존과 동일하므로 생략하거나 기존 내용 유지)
 const PageContainer = styled.div`
   width: 100%;
-  padding: 30px;
+  padding: 20px;
   box-sizing: border-box;
   background-color: var(--background2);
   min-height: calc(100vh - 50px);
@@ -445,7 +443,6 @@ const ToggleButton = styled.button`
     transform: scale(0.96);
   }
 `;
-
 
 const ChartWrapper = styled.div`
   height: 100px;
@@ -582,6 +579,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-    props.$active ? "var(--main)" : "var(--background2)"};
+      props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;

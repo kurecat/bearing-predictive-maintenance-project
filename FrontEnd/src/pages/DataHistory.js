@@ -573,12 +573,12 @@ export default function DataHistory() {
 }
 
 const PageContainer = styled.div`
-  padding: 30px;
+  padding: 20px;
   background-color: var(--background2);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 25px;
+  gap: 20px;
 `;
 const Header = styled.div`
   margin-bottom: 5px;
@@ -612,7 +612,7 @@ const KpiLabel = styled.div`
   font-weight: 600;
 `;
 const KpiValue = styled.div`
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   color: ${(props) => props.$color || "var(--font)"};
   margin-top: 10px;
