@@ -7,7 +7,8 @@ export default function Topbar({ toggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { notifications, markAsRead, removeNotification } = useContext(NotificationContext);
+  const { notifications, markAsRead, removeNotification } =
+    useContext(NotificationContext);
 
   const [tabs, setTabs] = useState([
     {
@@ -207,7 +208,10 @@ export default function Topbar({ toggleSidebar }) {
                   <EmptyMsg>알림이 없습니다.</EmptyMsg>
                 ) : (
                   notifications.map((n) => (
-                    <NotificationItem key={n.id} onClick={() => removeNotification(n.id)}>
+                    <NotificationItem
+                      key={n.id}
+                      onClick={() => removeNotification(n.id)}
+                    >
                       <p>{n.message}</p>
                       <span>{n.timestamp}</span>
                     </NotificationItem>
@@ -227,7 +231,7 @@ const Container = styled.div`
   align-items: center;
   justify-content: space-between;
   height: 50px;
-  padding: 0 24px;
+  padding: 0 20px;
   background-color: var(--background);
   border-bottom: 1px solid var(--border);
   width: 100%;
@@ -254,7 +258,7 @@ const IconButton = styled.button`
   transition: all 0.2s ease;
   &:hover {
     background-color: ${(props) =>
-    props.$isDashboard ? "transparent" : "var(--background2)"};
+      props.$isDashboard ? "transparent" : "var(--background2)"};
   }
 `;
 const TabContainer = styled.div`
@@ -268,7 +272,6 @@ const TabContainer = styled.div`
   }
 `;
 
-// [수정] FixedIcon 스타일: 평소에는 너비와 투명도를 0으로 설정
 const FixedIcon = styled.span`
   display: flex;
   align-items: center;
@@ -284,7 +287,7 @@ const TabItem = styled.div`
   align-items: center;
   padding: 8px 14px;
   border-radius: 6px;
-  font-size: var(--fontMd);
+  font-size: var(--fontSm);
   font-weight: ${(props) =>
     props.$isActive ? "var(--bold)" : "var(--medium)"};
   color: ${(props) => (props.$isActive ? "var(--main)" : "var(--font2)")};

@@ -37,25 +37,24 @@ const Navbar = () => {
 export default Navbar;
 
 const SidebarContainer = styled.div`
-  width: 250px;
+  width: 200px;
   height: 100vh;
   background-color: var(--background);
   border-right: 1px solid var(--border);
 
   display: flex;
   flex-direction: column;
-  padding: 30px 20px;
+  padding: 15px;
 `;
 
 const TopSection = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-bottom: 40px;
+  justify-content: center;
+  margin-bottom: 30px;
 `;
 
 const LogoArea = styled(Link)`
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--font);
   letter-spacing: 0.5px;
@@ -102,8 +101,8 @@ const MenuList = styled.div`
 `;
 
 const MenuItem = styled(Link)`
-  padding: 12px 16px;
-  font-size: 15px;
+  padding: 10px 16px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   text-decoration: none;
