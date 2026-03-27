@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo } from "react";
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import styled, { keyframes } from "styled-components";
 import {
   ComposedChart,
@@ -20,25 +20,64 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState([]);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const firstPageItems = 12;
-  const itemsPerPage = 21;
-  const pagesPerBlock = 10;
 
-  const totalPages = Math.ceil(
-    nodes.length <= firstPageItems
-      ? 1
-      : 1 + Math.ceil((nodes.length - firstPageItems) / itemsPerPage),
-  );
+  const gridRef = useRef(null);
+  const cardRef = useRef(null);
 
-  const currentItems = useMemo(() => {
-    if (currentPage === 1) {
-      return nodes.slice(0, firstPageItems);
-    } else {
-      const startIndex = firstPageItems + (currentPage - 2) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      return nodes.slice(startIndex, endIndex);
+  const [initialItemsPerPage, setInitialItemsPerPage] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentItems, setCurrentItems] = useState([]);
+
+  useEffect(() => {
+    if (!gridRef.current) return;
+
+    const containerHeight = gridRef.current.offsetHeight;
+    const cardHeight = gridRef.current.querySelector(".RealTimeCard")?.offsetHeight || 100;
+    const gap = 20;
+    const cols = 3;
+    const rowHeight = cardHeight + gap;
+    const rowsPerPage = Math.floor(containerHeight / rowHeight);
+
+    const perPage = rowsPerPage * cols;
+
+    // 첫 페이지용 값은 최초 한 번만 세팅
+    if (initialItemsPerPage === 0) {
+      setInitialItemsPerPage(perPage);
     }
+    // 이후 페이지용 값은 계속 갱신
+    setItemsPerPage(perPage);
+
+    console.log("initialItemsPerPage:", initialItemsPerPage);
+    console.log("itemsPerPage:", perPage);
   }, [nodes, currentPage]);
+
+  useEffect(() => {
+    if (initialItemsPerPage === 0) return;
+
+    let startIndex, endIndex;
+
+    if (currentPage === 1) {
+      startIndex = 0;
+      endIndex = initialItemsPerPage;
+    } else {
+      // 두 번째 페이지부터는 itemsPerPage 사용
+      startIndex = initialItemsPerPage + (currentPage - 2) * itemsPerPage;
+      endIndex = startIndex + itemsPerPage;
+    }
+
+    setCurrentItems(nodes.slice(startIndex, endIndex));
+
+    const total = Math.ceil(
+      (nodes.length - initialItemsPerPage) / itemsPerPage
+    ) + 1; // 첫 페이지 포함
+    setTotalPages(total);
+
+    console.log("currentItems:", startIndex, "-", endIndex);
+    console.log("totalPages:", total);
+  }, [nodes, currentPage, initialItemsPerPage, itemsPerPage]);
+
+  const pagesPerBlock = 10;
 
   const currentBlock = Math.ceil(currentPage / pagesPerBlock);
   const startPage = (currentBlock - 1) * pagesPerBlock + 1;
@@ -98,7 +137,7 @@ export default function Dashboard() {
     }));
 
   return (
-    <PageContainer>
+    <NonScrollPageContainer>
       {currentPage === 1 && (
         <>
           <HeaderContainer>
@@ -232,14 +271,14 @@ export default function Dashboard() {
         개별 모터 실시간 관제
       </ChartTitle>
 
-      <RealTimeGridContainer>
+      <RealTimeGridContainer ref={gridRef}>
         {currentItems.map((node) => {
           const isDanger = node.prob >= 70;
           const isWarning = node.prob >= 30 && node.prob < 70;
           const activeSegments = Math.floor(node.prob / 5);
 
           return (
-            <RealTimeCard key={node.id}>
+            <RealTimeCard key={node.id} ref={cardRef}>
               <CardLeft>
                 <MachineName>{node.name}</MachineName>
                 <BigNumber>
@@ -321,17 +360,20 @@ export default function Dashboard() {
           </PageBtn>
         </PaginationContainer>
       )}
-    </PageContainer>
+    </NonScrollPageContainer>
   );
 }
 
 // Styled Components (기존과 동일하므로 생략하거나 기존 내용 유지)
-const PageContainer = styled.div`
+
+const NonScrollPageContainer = styled.div`
   width: 100%;
   padding: 20px;
   box-sizing: border-box;
   background-color: var(--background2);
-  min-height: calc(100vh - 50px);
+  height: calc(100vh - 50px); /* 고정 높이 */
+  display: flex;
+  flex-direction: column;
 `;
 const HeaderContainer = styled.div`
   display: flex;
@@ -420,30 +462,6 @@ const ChartTitle = styled.h2`
   justify-content: space-between;
 `;
 
-const ToggleButton = styled.button`
-  margin-left: 10px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background-color: var(--background);
-  color: var(--font);
-  box-shadow: var(--shadow);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background-color: var(--main);
-    color: #fff;
-    border-color: var(--main);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
-`;
-
 const ChartWrapper = styled.div`
   height: 100px;
   width: 100%;
@@ -452,8 +470,10 @@ const ChartWrapper = styled.div`
 `;
 const RealTimeGridContainer = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, 1fr); /* 열 고정 */
+  grid-auto-rows: 100px;                 /* 카드 높이 고정 */
   gap: 20px;
+  flex: 1 1 auto;
 `;
 const RealTimeCard = styled.div`
   background: var(--background);
@@ -579,6 +599,6 @@ const PageNum = styled.button`
   cursor: pointer;
   &:hover {
     background: ${(props) =>
-      props.$active ? "var(--main)" : "var(--background2)"};
+    props.$active ? "var(--main)" : "var(--background2)"};
   }
 `;
