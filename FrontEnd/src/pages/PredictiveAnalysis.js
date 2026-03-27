@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import styled, { keyframes } from "styled-components";
+import axiosApi from "../api/AxiosApi";
 import {
   AreaChart,
   Area,
@@ -20,12 +21,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-<<<<<<< HEAD
-import axiosApi from "../api/AxiosApi.js";
 
-=======
-import axiosApi from "../api/AxiosApi";
->>>>>>> e2123d08fb2e1add0fac572d39f6ff9e31fd5306
+
 
 export default function PredictiveAnalysis() {
   const [file, setFile] = useState(null);
@@ -118,16 +115,9 @@ export default function PredictiveAnalysis() {
       };
 
       // 서버로 JSON 전송
-<<<<<<< HEAD
       axiosApi.post("/api/analyze/vibration", result, {
         headers: { "Content-Type": "application/json" }
       })
-=======
-      axiosApi
-        .post("/analyze/vibration", result, {
-          headers: { "Content-Type": "application/json" },
-        })
->>>>>>> e2123d08fb2e1add0fac572d39f6ff9e31fd5306
         .then((response) => {
           const resData = response.data || response;
 
