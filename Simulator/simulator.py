@@ -13,7 +13,7 @@ def collect_target_dirs(root_path):
         
         # 💡 조건 완화: 'vibration'이라는 단어가 없어도 무조건 찾도록 수정!
         # (현재는 '정상' 데이터만 쏘도록 되어 있습니다. 고장 데이터도 쏘고 싶다면 if문을 지우시면 됩니다.)
-        if "정상" in dirpath: 
+        if "vibration" in dirpath and "정상" in dirpath: 
             target_dirs.append((dirpath, sorted(csv_files)))
             
     return target_dirs
@@ -42,7 +42,7 @@ def folder_worker(dirpath, filenames, interval=5):
         idx = (idx + 1) % len(filenames)  
 
 # 💡 최상위 경로를 우리가 복사해둔 D드라이브로 확정!
-root = "G:/data" 
+root = "E:/data" 
 target_dirs = collect_target_dirs(root)
 
 # 데이터가 없을 경우 친절하게 알려주기
