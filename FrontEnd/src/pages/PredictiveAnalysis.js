@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import styled, { keyframes } from "styled-components";
-import axiosApi from "../api/AxiosApi";
 import {
   AreaChart,
   Area,
@@ -21,7 +20,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-
+import axiosApi from "../api/AxiosApi.js";
 
 
 export default function PredictiveAnalysis() {
